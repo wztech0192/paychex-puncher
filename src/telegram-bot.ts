@@ -5,14 +5,10 @@ import { analyzeTelegramMessage } from "./lib/llm.js";
 import { loadLocalEnv, resolveConfig } from "./lib/env.js";
 import { logger } from "./lib/logger.js";
 import {
-  getTelegramUpdates,
+  getLastTelegramMessage,
   sendMessageToTelegram,
 } from "./lib/telegram.js";
-import {
-  getTelegramListenerStatePath,
-  loadLastTelegramUpdateId,
-  saveLastTelegramUpdateId,
-} from "./lib/listener-state.js";
+import { getTelegramListenerStatePath } from "./lib/listener-state.js";
 import {
   formatScheduleConfig,
   getCurrentEasternDateTime,
@@ -82,24 +78,6 @@ function stripBotMention(text: string, botUsername?: string): string {
 
 function tooLongMessage(text: string): string {
   return `Please keep your message under ${MAX_INPUT_LENGTH} characters. Current length: ${text.length}.`;
-}
-
-function isPunchGroupMessage(
-  update: TelegramUpdate,
-  groupTitle: string,
-  chatId?: string,
-): boolean {
-  const message = getIncomingMessage(update);
-
-  if (!message) {
-    return false;
-  }
-
-  if (chatId && String(message.chat.id) === chatId) {
-    return true;
-  }
-
-  return message.chat.title === groupTitle;
 }
 
 export async function processTelegramUpdate(
@@ -362,74 +340,41 @@ export async function runTelegramListener(): Promise<void> {
     throw new Error("TELEGRAM_BOT_TOKEN is not configured.");
   }
 
-  const lastUpdateId = loadLastTelegramUpdateId();
-  let offset = typeof lastUpdateId === "number" ? lastUpdateId + 1 : undefined;
-
   logger.info(
     {
       groupTitle: config.telegramGroupTitle,
       chatId: config.telegramChatId,
       botUsername: config.telegramBotUsername,
-      lastUpdateId,
       statePath: getTelegramListenerStatePath(),
     },
     "Telegram bot listener started",
   );
 
   while (true) {
-    const updates = await getTelegramUpdates(config.telegramBotToken, offset, 30);
-    logger.debug({ count: updates.length }, "Received Telegram updates batch");
+    const lastMessage = await getLastTelegramMessage({
+      token: config.telegramBotToken,
+      groupTitle: config.telegramGroupTitle,
+      chatId: config.telegramChatId,
+      botUsername: config.telegramBotUsername,
+      timeout: 30,
+      maxAgeSeconds: 10,
+    });
 
-    for (const update of updates) {
-      offset = update.update_id + 1;
-      saveLastTelegramUpdateId(update.update_id);
-      const message = getIncomingMessage(update);
-
-      if (!message) {
-        continue;
-      }
-
-      if (
-        !isPunchGroupMessage(
-          update,
-          config.telegramGroupTitle,
-          config.telegramChatId,
-        )
-      ) {
-        logger.debug(
-          {
-            chatId: message.chat.id,
-            chatTitle: message.chat.title,
-            messageId: message.message_id,
-          },
-          "Skipping message outside Punch group",
-        );
-        continue;
-      }
-
-      if (!messageMentionsBot(message, config.telegramBotUsername)) {
-        logger.debug(
-          {
-            chatId: message.chat.id,
-            messageId: message.message_id,
-          },
-          "Skipping Punch group message without bot mention",
-        );
-        continue;
-      }
-
-      logger.info(
-        {
-          updateId: update.update_id,
-          chatId: message.chat.id,
-          chatTitle: message.chat.title,
-          messageId: message.message_id,
-          textPreview: previewText(message.text || ""),
-        },
-        "Processing Telegram listener update",
-      );
-      await processTelegramUpdate(update, config);
+    if (!lastMessage) {
+      continue;
     }
+
+    logger.info(
+      {
+        updateId: lastMessage.update.update_id,
+        chatId: lastMessage.message.chat.id,
+        chatTitle: lastMessage.message.chat.title,
+        messageId: lastMessage.message.message_id,
+        textPreview: previewText(lastMessage.message.text || ""),
+      },
+      "Processing latest Telegram listener update",
+    );
+    await processTelegramUpdate(lastMessage.update, config);
   }
 }
 

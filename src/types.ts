@@ -95,6 +95,11 @@ export interface TelegramUpdate {
   edited_message?: TelegramMessage;
 }
 
+export interface LastTelegramMessageResult {
+  update: TelegramUpdate;
+  message: TelegramMessage;
+}
+
 export type TelegramIntent =
   | {
       kind: "action";

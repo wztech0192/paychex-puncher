@@ -2,6 +2,7 @@ import type { Page } from "puppeteer-core";
 import { PAYCHEX_URL, punchSelectors } from "../constants.js";
 import { logger } from "../lib/logger.js";
 import {
+  getLastTelegramMessage,
   getTelegramUpdates,
   sendMessageToTelegram,
   sendPhotoToTelegram,
@@ -61,33 +62,29 @@ async function waitForManualOtpCompletion(
   );
   await notifyManualOtpRequired(config);
 
-  const id = loadLastTelegramUpdateId();
-  const update = (
-    await getTelegramUpdates(config.telegramBotToken!, id, 4)
-  )?.at(-1);
+  const lastMessage = await getLastTelegramMessage({
+    token: config.telegramBotToken!,
+    groupTitle: config.telegramGroupTitle,
+    chatId: config.telegramChatId,
+    botUsername: config.telegramBotUsername,
+    timeout: 60 * 4,
+    maxAgeSeconds: 10,
+  });
 
-  if (update) {
-    saveLastTelegramUpdateId(update.update_id + 1);
-  }
-
-  const message = update?.message ?? update?.edited_message;
-
-  if (message?.text) {
+  if (lastMessage?.message.text) {
     logger.info(
-      { text: message.text },
+      { text: lastMessage.message.text },
       "Received Telegram message for OTP verification",
     );
-    await focusAndTypeLikeHuman(page, "#one-time-password", message.text);
+    await focusAndTypeLikeHuman(
+      page,
+      "#one-time-password",
+      lastMessage.message.text,
+    );
 
     logger.info("Entering OTP and submitting verification");
-    await clickLikeHuman(
-      page,
-      '[data-payxautoid="payx.login.securityquestion.card.uncrecognizedDevice.checkbox"]',
-    );
-    await clickLikeHuman(
-      page,
-      '[data-payxautoid="payx.login.verifyotp.card.continue"]',
-    );
+    await clickLikeHuman(page, "#verify-otp-checkbox");
+    await clickLikeHuman(page, "#otp-next-button");
   } else {
     logger.warn("No Telegram message received for OTP verification");
   }
