@@ -22,6 +22,8 @@ const telegramIntentSchema = z.object({
   scheduleConfig: z
     .object({
       enabled: z.boolean(),
+      notifyMinutesBefore: z.number().int().min(0).max(1440),
+      testMode: z.boolean(),
       timezone: z.literal("America/New_York"),
       weekly: z.object({
         monday: z.object({ clockIn: z.string().regex(/^\d{2}:\d{2}$/).nullable(), clockOut: z.string().regex(/^\d{2}:\d{2}$/).nullable() }),
@@ -73,6 +75,7 @@ export async function analyzeTelegramMessage(options: {
       "- 打卡测试",
       "You can also update the scheduling config when the user asks to change work days, work times, or skip specific dates.",
       "The scheduler also has an enabled flag. The user can ask to turn the scheduler on or off.",
+      "The scheduler also has notifyMinutesBefore for early notification and testMode which makes both scheduled clockIn and clockOut run the test action instead.",
       "For schedule updates, set kind=schedule_update and return the full updated scheduleConfig.",
       "If the user asks about the schedule, answer using the current schedule config.",
       "Skip dates are one-off YYYY-MM-DD dates in Eastern time.",

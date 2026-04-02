@@ -1,6 +1,8 @@
+import { actionLabels } from "./constants.js";
 import { runApp } from "./app.js";
 import { loadLocalEnv, resolveConfig } from "./lib/env.js";
 import { logger } from "./lib/logger.js";
+import { sendMessageToTelegram } from "./lib/telegram.js";
 import {
   formatScheduleConfig,
   getCurrentEasternDateTime,
@@ -8,9 +10,11 @@ import {
   getScheduleRunStatePath,
   loadScheduleConfig,
   loadScheduleRunState,
+  markScheduledActionNotified,
   markScheduledActionTriggered,
   saveScheduleConfig,
   saveScheduleRunState,
+  shouldSendScheduleNotification,
   shouldTriggerScheduledAction,
 } from "./lib/schedule.js";
 
@@ -32,6 +36,38 @@ async function tick(): Promise<void> {
   );
 
   for (const action of ["clockIn", "clockOut"] as const) {
+    const notifyDecision = shouldSendScheduleNotification(
+      scheduleConfig,
+      runState,
+      action,
+    );
+
+    if (
+      notifyDecision.shouldNotify &&
+      config.telegramBotToken &&
+      config.telegramChatId
+    ) {
+      logger.info(
+        {
+          action,
+          dateKey: notifyDecision.dateKey,
+          scheduledTime: notifyDecision.scheduledTime,
+          notifyMinutesBefore: scheduleConfig.notifyMinutesBefore,
+        },
+        "Sending early schedule notification",
+      );
+      await sendMessageToTelegram(config.telegramBotToken, {
+        chatId: config.telegramChatId,
+        text: `提醒：${scheduleConfig.notifyMinutesBefore} 分钟后将自动执行 ${actionLabels[action]}，计划时间 ${notifyDecision.scheduledTime}（美东时间）${scheduleConfig.testMode ? "，当前为测试模式，将执行打卡测试" : ""}。`,
+      });
+      runState = markScheduledActionNotified(
+        runState,
+        notifyDecision.dateKey,
+        eastern.time,
+      );
+      saveScheduleRunState(runState);
+    }
+
     const decision = shouldTriggerScheduledAction(
       scheduleConfig,
       runState,
@@ -46,7 +82,7 @@ async function tick(): Promise<void> {
     logger.info({ action, dateKey: decision.dateKey }, "Triggering scheduled action");
     await runApp({
       ...config,
-      paychexAction: action,
+      paychexAction: scheduleConfig.testMode ? "test" : action,
     });
 
     runState = markScheduledActionTriggered(runState, decision.dateKey, eastern.time);

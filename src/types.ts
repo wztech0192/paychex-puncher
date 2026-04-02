@@ -20,6 +20,8 @@ export interface DailySchedule {
 
 export interface ScheduleConfig {
   enabled: boolean;
+  notifyMinutesBefore: number;
+  testMode: boolean;
   timezone: "America/New_York";
   weekly: Record<ScheduleDay, DailySchedule>;
   skipDates: string[];
@@ -27,6 +29,7 @@ export interface ScheduleConfig {
 
 export interface ScheduleRunState {
   lastTriggered: Partial<Record<`${string}:${"clockIn" | "clockOut"}`, string>>;
+  lastNotified: Partial<Record<`${string}:${"clockIn" | "clockOut"}`, string>>;
 }
 
 export interface AppConfig {

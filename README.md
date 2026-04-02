@@ -95,6 +95,8 @@ Telegram webhook behavior:
 - Includes the current scheduling config in the LLM system prompt.
 - Can describe the scheduling config when asked.
 - Can update the scheduling config and skip dates when asked.
+- Schedule config also supports `notifyMinutesBefore` for early Telegram reminders.
+- Schedule config also supports `testMode`; when enabled, scheduled clock-in and clock-out both run the test action.
 - Supported action phrases:
 - `打卡上班` -> triggers `runPaychexFlow` with `punchSelectors.clockIn`
 - `打卡下班` -> triggers `runPaychexFlow` with `punchSelectors.clockOut`
