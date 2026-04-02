@@ -28,10 +28,24 @@ export const supportedTelegramActions = {
 export type SupportedTelegramActionLabel =
   keyof typeof supportedTelegramActions;
 
-export const defaultChromeCandidates = [
-  process.env.CHROME_PATH,
+const windowsChromeCandidates = [
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
   "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
   "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+];
+
+const linuxChromeCandidates = [
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/microsoft-edge",
+  "/snap/bin/chromium",
+];
+
+export const defaultChromeCandidates = [
+  process.env.CHROME_PATH,
+  ...windowsChromeCandidates,
+  ...linuxChromeCandidates,
 ].filter((value): value is string => Boolean(value));

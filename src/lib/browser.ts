@@ -26,7 +26,7 @@ function findLocalBrowserExecutable(explicitPath?: string): string {
 
   if (!browserPath) {
     throw new Error(
-      "No supported browser executable was found. Set CHROME_PATH to chrome.exe or msedge.exe.",
+      "No supported browser executable was found. Set CHROME_PATH to a local Chrome, Chromium, or Edge executable.",
     );
   }
 

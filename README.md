@@ -13,6 +13,7 @@ When you run locally, Chrome keeps its normal profile data in `.chrome-profile/`
 - Other Chrome profile data tied to the session
 
 That profile directory is intentionally ignored by git. In AWS Lambda, browser state is ephemeral.
+Local persistent-profile runs work on both Windows and Linux, as long as Chrome/Chromium is installed or `CHROME_PATH` is set.
 
 ## Install
 
@@ -83,6 +84,8 @@ Optional local-only variables in `.env.local`:
 - `CHROME_PATH`
 - `TELEGRAM_GROUP_TITLE`
 - `OPENAI_MODEL`
+
+On Linux, `CHROME_PATH` can point to executables such as `/usr/bin/google-chrome`, `/usr/bin/google-chrome-stable`, `/usr/bin/chromium`, or `/usr/bin/chromium-browser`.
 
 Telegram webhook behavior:
 
