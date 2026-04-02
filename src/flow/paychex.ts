@@ -1,6 +1,11 @@
 import type { Page } from "puppeteer-core";
 import { PAYCHEX_URL, punchSelectors } from "../constants.js";
 import { logger } from "../lib/logger.js";
+import {
+  getTelegramUpdates,
+  sendMessageToTelegram,
+  sendPhotoToTelegram,
+} from "../lib/telegram.js";
 import type { AppConfig } from "../types.js";
 import {
   clickLikeHuman,
@@ -8,6 +13,13 @@ import {
   pause,
   performHumanWarmup,
 } from "../lib/human.js";
+import {
+  loadLastTelegramUpdateId,
+  saveLastTelegramUpdateId,
+} from "../lib/listener-state.js";
+
+const otpSelector = "#one-time-password";
+const otpWaitTimeoutMs = 5000;
 
 async function isAlreadyLoggedIn(page: Page): Promise<boolean> {
   const punchWidget = await page
@@ -15,6 +27,111 @@ async function isAlreadyLoggedIn(page: Page): Promise<boolean> {
     .catch(() => null);
 
   return Boolean(punchWidget);
+}
+
+async function notifyManualOtpRequired(config: AppConfig): Promise<void> {
+  if (!config.telegramBotToken || !config.telegramChatId) {
+    return;
+  }
+
+  await sendMessageToTelegram(config.telegramBotToken, {
+    chatId: config.telegramChatId,
+    text: "检测到 Paychex 一次性验证码页面。请发送5位数验证码，不带其他字符。4 分钟内未完成将自动取消。",
+  });
+}
+
+async function notifyManualOtpCancelled(config: AppConfig): Promise<void> {
+  if (!config.telegramBotToken || !config.telegramChatId) {
+    return;
+  }
+
+  await sendMessageToTelegram(config.telegramBotToken, {
+    chatId: config.telegramChatId,
+    text: "验证码验证已取消：4 分钟内未完成手动操作。",
+  });
+}
+
+async function waitForManualOtpCompletion(
+  page: Page,
+  config: AppConfig,
+): Promise<void> {
+  logger.warn(
+    { timeoutMs: otpWaitTimeoutMs },
+    "OTP step detected; waiting for manual verification in browser",
+  );
+  await notifyManualOtpRequired(config);
+
+  const id = loadLastTelegramUpdateId();
+  const update = (
+    await getTelegramUpdates(config.telegramBotToken!, id, 4)
+  )?.at(-1);
+
+  if (update) {
+    saveLastTelegramUpdateId(update.update_id + 1);
+  }
+
+  const message = update?.message ?? update?.edited_message;
+
+  if (message?.text) {
+    logger.info(
+      { text: message.text },
+      "Received Telegram message for OTP verification",
+    );
+    await focusAndTypeLikeHuman(page, "#one-time-password", message.text);
+
+    logger.info("Entering OTP and submitting verification");
+    await clickLikeHuman(
+      page,
+      '[data-payxautoid="payx.login.securityquestion.card.uncrecognizedDevice.checkbox"]',
+    );
+    await clickLikeHuman(
+      page,
+      '[data-payxautoid="payx.login.verifyotp.card.continue"]',
+    );
+  } else {
+    logger.warn("No Telegram message received for OTP verification");
+  }
+
+  await page.waitForNavigation({
+    waitUntil: "networkidle2",
+    timeout: 120000,
+  });
+
+  const screenshot = (await page.screenshot({
+    type: "png",
+  })) as Uint8Array;
+
+  await sendPhotoToTelegram(config.telegramBotToken!, config.telegramChatId!, {
+    photoBuffer: screenshot,
+    filename: "finish-screen.png",
+    caption: `已输入 OTP，等待验证结果...`,
+  });
+
+  const completed = await page
+    .waitForFunction(
+      async ({ otpSelector: fieldSelector, dashboardSelector }) => {
+        const dashboard = document.querySelector(dashboardSelector);
+        const otpField = document.querySelector(fieldSelector);
+
+        return !otpField || Boolean(dashboard);
+      },
+      { timeout: otpWaitTimeoutMs },
+      {
+        otpSelector,
+        dashboardSelector: punchSelectors.clockIn,
+      },
+    )
+    .then(() => true)
+    .catch(() => false);
+
+  if (!completed) {
+    await notifyManualOtpCancelled(config);
+    throw new Error(
+      "Manual OTP verification timed out after 4 minutes and was cancelled.",
+    );
+  }
+
+  logger.info("Manual OTP step completed");
 }
 
 export async function runPaychexFlow(
@@ -48,10 +165,22 @@ export async function runPaychexFlow(
       config.paychexPassword,
     );
     await clickLikeHuman(page, "#login-button");
-    await page.waitForNavigation({
-      waitUntil: "networkidle2",
-      timeout: 120000,
-    });
+    await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
+
+    const otpField = await page
+      .waitForSelector(otpSelector, {
+        timeout: 3000,
+      })
+      .catch(() => null);
+
+    if (otpField) {
+      await waitForManualOtpCompletion(page, config);
+      await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
+    }
+
+    logger.info("Login flow completed");
+
+    await page.waitForSelector(punchSelectors.clockIn, { timeout: 120000 });
     logger.info("Dashboard loaded, running warmup");
     await performHumanWarmup(page);
   } else {

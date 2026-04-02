@@ -1,6 +1,6 @@
 import { actionLabels } from "./constants.js";
 import { runPaychexFlow } from "./flow/paychex.js";
-import { launchBrowser, waitForBrowserClose } from "./lib/browser.js";
+import { launchBrowser } from "./lib/browser.js";
 import { logger } from "./lib/logger.js";
 import { sendPhotoToTelegram } from "./lib/telegram.js";
 import type { AppConfig } from "./types.js";
@@ -58,12 +58,6 @@ export async function runApp(config: AppConfig): Promise<void> {
     }
 
     throw error;
-  }
-
-  if (config.runtime === "local" && !config.isHeadless) {
-    logger.info("Waiting for local browser window to close");
-    await waitForBrowserClose(session.browser);
-    return;
   }
 
   logger.info("Closing browser session");
