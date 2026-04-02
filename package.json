@@ -1,0 +1,39 @@
+{
+  "name": "paychex-puncher",
+  "version": "1.0.0",
+  "description": "Puppeteer automation for opening Paychex with a persistent Chrome profile.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "dev:clockin": "tsx src/index.ts clockin",
+    "dev:clockout": "tsx src/index.ts clockout",
+    "dev:test": "tsx src/index.ts test",
+    "dev:headless": "tsx src/index.ts --headless",
+    "dev:bot": "tsx src/telegram-bot.ts",
+    "start": "node dist/index.js",
+    "start:clockin": "node dist/index.js clockin",
+    "start:clockout": "node dist/index.js clockout",
+    "start:test": "node dist/index.js test",
+    "start:bot": "node dist/telegram-bot.js",
+    "start:headless": "node dist/index.js --headless"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.49",
+    "@sparticuz/chromium": "^143.0.4",
+    "ai": "^6.0.143",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3",
+    "puppeteer-core": "^24.40.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.161",
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
