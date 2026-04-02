@@ -13,9 +13,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  logger.error(
-    { err: error },
-    "Local Paychex runner failed",
-  );
+  logger.error({ err: error }, "Local Paychex runner failed");
   process.exit(1);
 });

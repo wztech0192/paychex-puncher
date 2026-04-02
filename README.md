@@ -57,6 +57,12 @@ npm run dev:bot
 
 The local Telegram listener only processes messages in the `Punch` group chat that explicitly mention the bot.
 
+Run the schedule poller:
+
+```bash
+npm run dev:scheduler
+```
+
 ## Lambda Usage
 
 Build output is written to `dist/`. The Lambda handler entry is `dist/lambda.js` and exports `handler`.
@@ -83,6 +89,9 @@ Telegram webhook behavior:
 - Responds only when the bot is explicitly mentioned, such as `@WZ01192_BOT summarize this`.
 - Rejects prompts longer than 200 characters.
 - Uses the Vercel AI SDK with the OpenAI provider to analyze and answer the message.
+- Includes the current scheduling config in the LLM system prompt.
+- Can describe the scheduling config when asked.
+- Can update the scheduling config and skip dates when asked.
 - Supported action phrases:
 - `打卡上班` -> triggers `runPaychexFlow` with `punchSelectors.clockIn`
 - `打卡下班` -> triggers `runPaychexFlow` with `punchSelectors.clockOut`

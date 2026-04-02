@@ -4,6 +4,31 @@ import type {
   SupportedTelegramActionLabel,
 } from "./constants.js";
 
+export type ScheduleDay =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
+
+export interface DailySchedule {
+  clockIn: string | null;
+  clockOut: string | null;
+}
+
+export interface ScheduleConfig {
+  enabled: boolean;
+  timezone: "America/New_York";
+  weekly: Record<ScheduleDay, DailySchedule>;
+  skipDates: string[];
+}
+
+export interface ScheduleRunState {
+  lastTriggered: Partial<Record<`${string}:${"clockIn" | "clockOut"}`, string>>;
+}
+
 export interface AppConfig {
   isHeadless: boolean;
   runtime: "local" | "lambda";
@@ -75,6 +100,11 @@ export type TelegramIntent =
       kind: "action";
       actionLabel: SupportedTelegramActionLabel;
       response: string;
+    }
+  | {
+      kind: "schedule_update";
+      response: string;
+      scheduleConfig: ScheduleConfig;
     }
   | {
       kind: "reply";

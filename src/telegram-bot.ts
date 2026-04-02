@@ -13,6 +13,12 @@ import {
   loadLastTelegramUpdateId,
   saveLastTelegramUpdateId,
 } from "./lib/listener-state.js";
+import {
+  formatScheduleConfig,
+  getCurrentEasternDateTime,
+  loadScheduleConfig,
+  saveScheduleConfig,
+} from "./lib/schedule.js";
 import type { TelegramMessage, TelegramUpdate } from "./types.js";
 
 const MAX_INPUT_LENGTH = 200;
@@ -206,12 +212,17 @@ export async function processTelegramUpdate(
   }
 
   let intent;
+  const scheduleConfig = saveScheduleConfig(loadScheduleConfig());
+  const eastern = getCurrentEasternDateTime();
 
   try {
     intent = await analyzeTelegramMessage({
       apiKey: config.openAiApiKey,
       model: config.openAiModel,
       input: prompt,
+      scheduleConfig,
+      currentEasternDate: eastern.date,
+      currentEasternWeekday: eastern.weekday,
     });
   } catch (error) {
     const messageText =
@@ -265,6 +276,20 @@ export async function processTelegramUpdate(
       ...config,
       telegramChatId: String(message.chat.id),
       paychexAction: supportedTelegramActions[intent.actionLabel],
+    });
+    return;
+  }
+
+  if (intent.kind === "schedule_update") {
+    const savedConfig = saveScheduleConfig(intent.scheduleConfig);
+    logger.info(
+      { summary: formatScheduleConfig(savedConfig) },
+      "Saved updated schedule config",
+    );
+    await sendMessageToTelegram(config.telegramBotToken, {
+      chatId: String(message.chat.id),
+      text: intent.response,
+      replyToMessageId: message.message_id,
     });
     return;
   }

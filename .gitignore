@@ -4,6 +4,8 @@ cypress/videos/
 .chrome-profile/
 .env.local
 .telegram-listener-state.json
+.schedule-config.json
+.schedule-run-state.json
 
 finish-screen.png
 dist
