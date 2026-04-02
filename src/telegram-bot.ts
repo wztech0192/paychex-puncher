@@ -12,6 +12,7 @@ import { getTelegramListenerStatePath } from "./lib/listener-state.js";
 import {
   formatScheduleConfig,
   getCurrentEasternDateTime,
+  getScheduleConfigPath,
   loadScheduleConfig,
   saveScheduleConfig,
 } from "./lib/schedule.js";
@@ -80,6 +81,10 @@ function tooLongMessage(text: string): string {
   return `Please keep your message under ${MAX_INPUT_LENGTH} characters. Current length: ${text.length}.`;
 }
 
+function isConfigCommand(text: string): boolean {
+  return text.trim().toLowerCase() === "config";
+}
+
 export async function processTelegramUpdate(
   update: TelegramUpdate,
   config = resolveConfig({ isHeadless: true, runtime: "lambda" }),
@@ -146,6 +151,27 @@ export async function processTelegramUpdate(
     "Processing Telegram mention",
   );
 
+  if (isConfigCommand(prompt)) {
+    const scheduleConfig = saveScheduleConfig(loadScheduleConfig());
+    const rawConfig = JSON.stringify(scheduleConfig, null, 2);
+
+    logger.info(
+      {
+        chatId: message.chat.id,
+        messageId: message.message_id,
+        scheduleConfigPath: getScheduleConfigPath(),
+      },
+      "Sending raw schedule config",
+    );
+
+    await sendMessageToTelegram(config.telegramBotToken, {
+      chatId: String(message.chat.id),
+      text: `\`\`\`json\n${rawConfig}\n\`\`\``,
+      replyToMessageId: message.message_id,
+    });
+    return;
+  }
+
   if (!prompt) {
     logger.info(
       { chatId: message.chat.id, messageId: message.message_id },
@@ -199,6 +225,7 @@ export async function processTelegramUpdate(
       model: config.openAiModel,
       input: prompt,
       scheduleConfig,
+      todayText: `${eastern.date} ${eastern.weekday} America/New_York`,
       currentEasternDate: eastern.date,
       currentEasternWeekday: eastern.weekday,
     });

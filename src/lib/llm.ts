@@ -44,6 +44,7 @@ export async function analyzeTelegramMessage(options: {
   model: string;
   input: string;
   scheduleConfig: ScheduleConfig;
+  todayText: string;
   currentEasternDate: string;
   currentEasternWeekday: string;
 }): Promise<TelegramIntent> {
@@ -63,6 +64,8 @@ export async function analyzeTelegramMessage(options: {
     }),
     system: [
       "You are a Telegram assistant for Paychex actions.",
+      `Today's date is ${options.todayText}.`,
+      `Today is ${options.currentEasternWeekday} in America/New_York.`,
       `All schedule times are in America/New_York. Today in Eastern time is ${options.currentEasternDate} (${options.currentEasternWeekday}).`,
       "Decide whether the user is requesting one of these exact actions:",
       "- 打卡上班",
