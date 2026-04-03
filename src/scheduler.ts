@@ -1,6 +1,7 @@
 import { actionLabels } from "./constants.js";
 import { runApp } from "./app.js";
 import { loadLocalEnv, resolveConfig } from "./lib/env.js";
+import { generateFunnyPunchLine } from "./lib/llm.js";
 import { logger } from "./lib/logger.js";
 import { installProcessErrorHandlers, sleep } from "./lib/runtime.js";
 import { sendMessageToTelegram } from "./lib/telegram.js";
@@ -84,7 +85,10 @@ async function tick(): Promise<void> {
     );
 
     if (!decision.shouldRun) {
-      logger.debug({ action, reason: decision.reason }, "Skipping scheduled action");
+      logger.debug(
+        { action, reason: decision.reason },
+        "Skipping scheduled action",
+      );
       continue;
     }
 
@@ -93,6 +97,36 @@ async function tick(): Promise<void> {
         { action, dateKey: decision.dateKey },
         "Triggering scheduled action",
       );
+
+      if (
+        config.telegramBotToken &&
+        config.telegramChatId &&
+        config.openAiApiKey
+      ) {
+        try {
+          const funnyLine = await generateFunnyPunchLine({
+            apiKey: config.openAiApiKey,
+            model: config.openAiModel,
+            action,
+          });
+
+          logger.info(
+            { action, dateKey: decision.dateKey, funnyLine },
+            "Sending funny pre-punch Telegram message",
+          );
+
+          await sendMessageToTelegram(config.telegramBotToken, {
+            chatId: config.telegramChatId,
+            text: funnyLine,
+          });
+        } catch (error) {
+          logger.error(
+            { err: error, action, dateKey: decision.dateKey },
+            "Failed to send funny pre-punch Telegram message",
+          );
+        }
+      }
+
       await runApp({
         ...config,
         paychexAction: scheduleConfig.testMode ? "test" : action,
@@ -159,6 +193,6 @@ function isDirectSchedulerEntry(): boolean {
 
 if (isDirectSchedulerEntry()) {
   runScheduler().catch((error) => {
-  logger.fatal({ err: error }, "Scheduler failed during startup");
+    logger.fatal({ err: error }, "Scheduler failed during startup");
   });
 }

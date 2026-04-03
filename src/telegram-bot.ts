@@ -512,17 +512,6 @@ export async function runTelegramListener(): Promise<void> {
     logger.error({ err: error }, "Embedded scheduler failed during startup");
   });
 
-  if (config.telegramChatId) {
-    try {
-      await sendMessageToTelegram(config.telegramBotToken, {
-        chatId: config.telegramChatId,
-        text: "Hello! 琦琦打卡助手已上线。",
-      });
-    } catch (error) {
-      logger.error({ err: error }, "Failed to send startup notification");
-    }
-  }
-
   while (true) {
     try {
       const lastMessage = await getLastTelegramMessage({

@@ -4,6 +4,7 @@ import {
   supportedTelegramActions,
   type SupportedTelegramActionLabel,
 } from "../constants.js";
+import type { PunchAction } from "../constants.js";
 import type { ScheduleConfig, TelegramIntent } from "../types.js";
 import { z } from "zod";
 
@@ -187,4 +188,40 @@ export async function analyzeTelegramMessage(options: {
     kind: "reply",
     response: output.response || "我暂时无法处理这条消息。",
   };
+}
+
+export async function generateFunnyPunchLine(options: {
+  apiKey: string;
+  model: string;
+  action: Extract<PunchAction, "clockIn" | "clockOut">;
+}): Promise<string> {
+  const openai = createOpenAI({
+    apiKey: options.apiKey,
+  });
+
+  const actionTopic =
+    options.action === "clockIn" ? "牛马打卡上班" : "牛马打卡下班";
+
+  const { text } = await generateText({
+    model: openai(options.model),
+    providerOptions: {
+      openai: {
+        reasoningEffort: "minimal",
+      },
+    },
+    system: [
+      "You write short funny Chinese one-liners for Telegram.",
+      `The topic is ${actionTopic}.`,
+      "Use a playful, witty tone.",
+      "Keep it to exactly one sentence.",
+      "Keep it under 40 Chinese characters when possible.",
+      "Output only the sentence itself.",
+    ].join(" "),
+    prompt:
+      options.action === "clockIn"
+        ? "写一句关于牛马打卡上班的随机搞笑句子。"
+        : "写一句关于牛马打卡下班的随机搞笑句子。",
+  });
+
+  return text.trim();
 }
