@@ -380,7 +380,7 @@ export async function processTelegramUpdate(
   if (intent.kind === "action") {
     await sendMessageToTelegram(config.telegramBotToken, {
       chatId: String(message.chat.id),
-      text: intent.response,
+      text: `开始执行: ${intent.actionLabel}`,
       replyToMessageId: message.message_id,
     });
 
