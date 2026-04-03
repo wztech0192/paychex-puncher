@@ -20,8 +20,8 @@ import {
   shouldTriggerScheduledAction,
 } from "./lib/schedule.js";
 
-const pollIntervalMinMs = 60_000;
-const pollIntervalMaxMs = 90_000;
+const pollIntervalMinMs = 30_000;
+const pollIntervalMaxMs = 50_000;
 const schedulerErrorBackoffMs = 15_000;
 
 function getRandomPollIntervalMs(): number {
