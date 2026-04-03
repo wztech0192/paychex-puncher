@@ -85,6 +85,64 @@ function isConfigCommand(text: string): boolean {
   return text.trim().toLowerCase() === "config";
 }
 
+function isHelpCommand(text: string): boolean {
+  return text.trim() === "指令";
+}
+
+function buildCommandsHelpText(): string {
+  return [
+    "可用指令：",
+    "1. 指令",
+    "   显示所有可用指令。",
+    "2. config",
+    "   显示原始 .schedule-config.json 配置。",
+    "3. 打开测试模式",
+    "   打开测试模式。自动排程触发时，打卡上班/下班都会改为执行测试动作。",
+    "4. 关闭测试模式",
+    "   关闭测试模式。",
+    "5. 打开自动",
+    "   打开自动排程。",
+    "6. 关闭自动",
+    "   关闭自动排程。",
+    "7. 打卡上班",
+    "   立即执行上班打卡。",
+    "8. 打卡下班",
+    "   立即执行下班打卡。",
+    "9. 打卡测试",
+    "   立即执行测试动作。",
+    "10. 自然语言排程修改",
+    "   例如：把周一到周五上班改成 09:00，下班改成 18:00。",
+    "11. 自然语言跳过日期",
+    "   例如：跳过 2026-04-10 和 2026-04-11。",
+    "12. 自然语言排程查询",
+    "   例如：现在的自动排程是什么？提前几分钟提醒？",
+  ].join("\n");
+}
+
+function getDirectScheduleToggleCommand(
+  text: string,
+): "enable-test" | "disable-test" | "enable-auto" | "disable-auto" | null {
+  const normalized = text.trim();
+
+  if (normalized === "打开测试模式") {
+    return "enable-test";
+  }
+
+  if (normalized === "关闭测试模式") {
+    return "disable-test";
+  }
+
+  if (normalized === "打开自动") {
+    return "enable-auto";
+  }
+
+  if (normalized === "关闭自动") {
+    return "disable-auto";
+  }
+
+  return null;
+}
+
 export async function processTelegramUpdate(
   update: TelegramUpdate,
   config = resolveConfig({ isHeadless: true, runtime: "lambda" }),
@@ -153,7 +211,6 @@ export async function processTelegramUpdate(
 
   if (isConfigCommand(prompt)) {
     const scheduleConfig = saveScheduleConfig(loadScheduleConfig());
-    const rawConfig = JSON.stringify(scheduleConfig, null, 2);
 
     logger.info(
       {
@@ -166,7 +223,66 @@ export async function processTelegramUpdate(
 
     await sendMessageToTelegram(config.telegramBotToken, {
       chatId: String(message.chat.id),
-      text: `\`\`\`json\n${rawConfig}\n\`\`\``,
+      text: formatScheduleConfig(scheduleConfig),
+      replyToMessageId: message.message_id,
+    });
+    return;
+  }
+
+  if (isHelpCommand(prompt)) {
+    logger.info(
+      {
+        chatId: message.chat.id,
+        messageId: message.message_id,
+      },
+      "Sending command help text",
+    );
+
+    await sendMessageToTelegram(config.telegramBotToken, {
+      chatId: String(message.chat.id),
+      text: buildCommandsHelpText(),
+      replyToMessageId: message.message_id,
+    });
+    return;
+  }
+
+  const directCommand = getDirectScheduleToggleCommand(prompt);
+
+  if (directCommand) {
+    const scheduleConfig = saveScheduleConfig(loadScheduleConfig());
+
+    if (directCommand === "enable-test") {
+      scheduleConfig.testMode = true;
+    } else if (directCommand === "disable-test") {
+      scheduleConfig.testMode = false;
+    } else if (directCommand === "enable-auto") {
+      scheduleConfig.enabled = true;
+    } else if (directCommand === "disable-auto") {
+      scheduleConfig.enabled = false;
+    }
+
+    const savedConfig = saveScheduleConfig(scheduleConfig);
+    const commandReplyMap: Record<typeof directCommand, string> = {
+      "enable-test": "已打开测试模式。",
+      "disable-test": "已关闭测试模式。",
+      "enable-auto": "已打开自动。",
+      "disable-auto": "已关闭自动。",
+    };
+
+    logger.info(
+      {
+        chatId: message.chat.id,
+        messageId: message.message_id,
+        directCommand,
+        enabled: savedConfig.enabled,
+        testMode: savedConfig.testMode,
+      },
+      "Applied direct schedule toggle command",
+    );
+
+    await sendMessageToTelegram(config.telegramBotToken, {
+      chatId: String(message.chat.id),
+      text: `${commandReplyMap[directCommand]}}`,
       replyToMessageId: message.message_id,
     });
     return;
@@ -286,7 +402,12 @@ export async function processTelegramUpdate(
   }
 
   if (intent.kind === "schedule_update") {
-    const savedConfig = saveScheduleConfig(intent.scheduleConfig);
+    const mergedConfig = {
+      ...intent.scheduleConfig,
+      enabled: scheduleConfig.enabled,
+      testMode: scheduleConfig.testMode,
+    };
+    const savedConfig = saveScheduleConfig(mergedConfig);
     logger.info(
       { summary: formatScheduleConfig(savedConfig) },
       "Saved updated schedule config",
@@ -405,7 +526,10 @@ export async function runTelegramListener(): Promise<void> {
   }
 }
 
-if (process.argv[1]?.endsWith("telegram-bot.ts") || process.argv[1]?.endsWith("telegram-bot.js")) {
+if (
+  process.argv[1]?.endsWith("telegram-bot.ts") ||
+  process.argv[1]?.endsWith("telegram-bot.js")
+) {
   runTelegramListener().catch((error) => {
     logger.error({ err: error }, "Telegram bot listener crashed");
     process.exit(1);

@@ -22,6 +22,8 @@ npm install
 npm run build
 ```
 
+Create a local env file from [.env.example](/C:/Users/wjzhe/Desktop/Project/paychex-puncher/.env.example) before running locally.
+
 ## Local Usage
 
 Use the interactive local runner:
