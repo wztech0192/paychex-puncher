@@ -2,7 +2,7 @@ import type { APIGatewayProxyResultV2, Handler } from "aws-lambda";
 import { supportedTelegramActions } from "./constants.js";
 import { runApp } from "./app.js";
 import { analyzeTelegramMessage } from "./lib/llm.js";
-import { loadLocalEnv, resolveConfig } from "./lib/env.js";
+import { loadLocalEnv, parseBooleanEnv, resolveConfig } from "./lib/env.js";
 import { logger } from "./lib/logger.js";
 import {
   getLastTelegramMessage,
@@ -482,7 +482,10 @@ export const telegramWebhookHandler: Handler = async (
 
 export async function runTelegramListener(): Promise<void> {
   loadLocalEnv();
-  const config = resolveConfig({ isHeadless: false, runtime: "local" });
+  const config = resolveConfig({
+    isHeadless: parseBooleanEnv("TELEGRAM_LISTENER_HEADLESS", false),
+    runtime: "local",
+  });
 
   if (!config.telegramBotToken) {
     throw new Error("TELEGRAM_BOT_TOKEN is not configured.");

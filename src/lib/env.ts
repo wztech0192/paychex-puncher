@@ -38,6 +38,26 @@ export function loadLocalEnv(): void {
   }
 }
 
+export function parseBooleanEnv(name: string, defaultValue = false): boolean {
+  const value = process.env[name];
+
+  if (value == null || value.trim() === "") {
+    return defaultValue;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  return defaultValue;
+}
+
 function requireEnv(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
 

@@ -86,6 +86,9 @@ Optional local-only variables in `.env.local`:
 - `CHROME_PATH`
 - `TELEGRAM_GROUP_TITLE`
 - `OPENAI_MODEL`
+- `TELEGRAM_LISTENER_HEADLESS`
+
+`TELEGRAM_LISTENER_HEADLESS` controls whether the local long-poll Telegram listener launches Chrome headlessly. It defaults to `false`.
 
 On Linux, `CHROME_PATH` can point to executables such as `/usr/bin/google-chrome`, `/usr/bin/google-chrome-stable`, `/usr/bin/chromium`, or `/usr/bin/chromium-browser`.
 
