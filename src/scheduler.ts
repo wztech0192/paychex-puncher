@@ -20,8 +20,16 @@ import {
   shouldTriggerScheduledAction,
 } from "./lib/schedule.js";
 
-const pollIntervalMs = 30_000;
+const pollIntervalMinMs = 60_000;
+const pollIntervalMaxMs = 90_000;
 const schedulerErrorBackoffMs = 15_000;
+
+function getRandomPollIntervalMs(): number {
+  return (
+    pollIntervalMinMs +
+    Math.floor(Math.random() * (pollIntervalMaxMs - pollIntervalMinMs + 1))
+  );
+}
 
 async function tick(): Promise<void> {
   const config = resolveConfig({ isHeadless: true, runtime: "local" });
@@ -169,7 +177,9 @@ export async function runScheduler(options?: {
   while (true) {
     try {
       await tick();
-      await sleep(pollIntervalMs);
+      const nextPollInMs = getRandomPollIntervalMs();
+      logger.debug({ nextPollInMs }, "Scheduler sleeping before next tick");
+      await sleep(nextPollInMs);
     } catch (error) {
       logger.error(
         { err: error, backoffMs: schedulerErrorBackoffMs },

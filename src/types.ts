@@ -28,6 +28,7 @@ export interface ScheduleConfig {
 }
 
 export interface ScheduleRunState {
+  lastAttempted: Partial<Record<`${string}:${"clockIn" | "clockOut"}`, string>>;
   lastTriggered: Partial<Record<`${string}:${"clockIn" | "clockOut"}`, string>>;
   lastNotified: Partial<Record<`${string}:${"clockIn" | "clockOut"}`, string>>;
 }

@@ -60,6 +60,7 @@ function createDefaultScheduleConfig(): ScheduleConfig {
 
 function createDefaultRunState(): ScheduleRunState {
   return {
+    lastAttempted: {},
     lastTriggered: {},
     lastNotified: {},
   };
@@ -208,6 +209,10 @@ export function loadScheduleRunState(): ScheduleRunState {
     const raw = fs.readFileSync(scheduleRunStatePath, "utf8");
     const parsed = JSON.parse(raw) as ScheduleRunState;
     return {
+      lastAttempted:
+        typeof parsed.lastAttempted === "object" && parsed.lastAttempted
+          ? parsed.lastAttempted
+          : {},
       lastTriggered:
         typeof parsed.lastTriggered === "object" && parsed.lastTriggered
           ? parsed.lastTriggered
@@ -264,6 +269,10 @@ export function shouldTriggerScheduledAction(
 
   if (runState.lastTriggered[dateKey] === eastern.time) {
     return { shouldRun: false, dateKey, reason: "already-triggered" };
+  }
+
+  if (runState.lastAttempted[dateKey] === eastern.time) {
+    return { shouldRun: false, dateKey, reason: "already-attempted" };
   }
 
   return { shouldRun: true, dateKey };
@@ -352,11 +361,29 @@ export function markScheduledActionTriggered(
   time: string,
 ): ScheduleRunState {
   return {
+    lastAttempted: {
+      ...runState.lastAttempted,
+      [dateKey]: time,
+    },
     lastTriggered: {
       ...runState.lastTriggered,
       [dateKey]: time,
     },
     lastNotified: runState.lastNotified,
+  };
+}
+
+export function markScheduledActionAttempted(
+  runState: ScheduleRunState,
+  dateKey: string,
+  time: string,
+): ScheduleRunState {
+  return {
+    ...runState,
+    lastAttempted: {
+      ...runState.lastAttempted,
+      [dateKey]: time,
+    },
   };
 }
 

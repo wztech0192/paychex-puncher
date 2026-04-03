@@ -9,10 +9,14 @@ const __dirname = path.dirname(__filename);
 
 const envPath = path.resolve(__dirname, "../../.env.local");
 
-dotenv.config({
-  path: envPath,
-  override: false,
-});
+function loadLocalEnv(): void {
+  dotenv.config({
+    path: envPath,
+    override: false,
+  });
+}
+
+loadLocalEnv();
 
 export function parseBooleanEnv(name: string, defaultValue = false): boolean {
   const value = process.env[name];
