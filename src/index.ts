@@ -1,9 +1,8 @@
+import { resolveConfig } from "./lib/env.js";
 import { runApp } from "./app.js";
-import { loadLocalEnv, resolveConfig } from "./lib/env.js";
 import { logger } from "./lib/logger.js";
 
 async function main(): Promise<void> {
-  loadLocalEnv();
   const config = resolveConfig();
   logger.info(
     { action: config.paychexAction, headless: config.isHeadless },

@@ -1,42 +1,18 @@
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 import type { AppConfig } from "../types.js";
 import { resolveActionFromArgs } from "./cli.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export function loadLocalEnv(): void {
-  const envPath = path.resolve(__dirname, "../../.env.local");
+const envPath = path.resolve(__dirname, "../../.env.local");
 
-  if (!fs.existsSync(envPath)) {
-    return;
-  }
-
-  const lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    const separatorIndex = trimmed.indexOf("=");
-
-    if (separatorIndex === -1) {
-      continue;
-    }
-
-    const key = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
-}
+dotenv.config({
+  path: envPath,
+  override: false,
+});
 
 export function parseBooleanEnv(name: string, defaultValue = false): boolean {
   const value = process.env[name];
@@ -56,16 +32,6 @@ export function parseBooleanEnv(name: string, defaultValue = false): boolean {
   }
 
   return defaultValue;
-}
-
-function requireEnv(name: string, fallback?: string): string {
-  const value = process.env[name] ?? fallback;
-
-  if (!value) {
-    throw new Error(`Missing required environment variable ${name}.`);
-  }
-
-  return value;
 }
 
 export function resolveConfig(

@@ -1,8 +1,8 @@
+import { parseBooleanEnv, resolveConfig } from "./lib/env.js";
 import type { APIGatewayProxyResultV2, Handler } from "aws-lambda";
 import { supportedTelegramActions } from "./constants.js";
 import { runApp } from "./app.js";
-import { analyzeTelegramMessage } from "./lib/llm.js";
-import { loadLocalEnv, parseBooleanEnv, resolveConfig } from "./lib/env.js";
+import { analyzeTelegramMessage, generateFunnyPunchLine } from "./lib/llm.js";
 import { logger } from "./lib/logger.js";
 import { installProcessErrorHandlers, sleep } from "./lib/runtime.js";
 import { runScheduler } from "./scheduler.js";
@@ -485,7 +485,6 @@ export const telegramWebhookHandler: Handler = async (
 
 export async function runTelegramListener(): Promise<void> {
   installProcessErrorHandlers("telegram-listener");
-  loadLocalEnv();
   const config = resolveConfig({
     isHeadless: parseBooleanEnv("TELEGRAM_LISTENER_HEADLESS", false),
     runtime: "local",

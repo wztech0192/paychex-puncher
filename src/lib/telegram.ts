@@ -75,13 +75,15 @@ export async function getTelegramUpdates(
   );
   const data = (await response.json()) as TelegramGetUpdatesResult;
   if (!response.ok || !data.ok) {
-    throw new Error("Telegram getUpdates failed.");
+    throw new Error("Telegram getUpdates failed.", { cause: data });
   }
 
   return data.result;
 }
 
-function getIncomingMessage(update: TelegramUpdate): TelegramMessage | undefined {
+function getIncomingMessage(
+  update: TelegramUpdate,
+): TelegramMessage | undefined {
   return update.message ?? update.edited_message;
 }
 
@@ -126,7 +128,10 @@ function isPunchGroupMessage(
   return message.chat.title === groupTitle;
 }
 
-function isFreshEnough(message: TelegramMessage, maxAgeSeconds: number): boolean {
+function isFreshEnough(
+  message: TelegramMessage,
+  maxAgeSeconds: number,
+): boolean {
   const nowInSeconds = Math.floor(Date.now() / 1000);
   return nowInSeconds - message.date <= maxAgeSeconds;
 }
@@ -140,7 +145,8 @@ export async function getLastTelegramMessage(options: {
   maxAgeSeconds?: number;
 }): Promise<LastTelegramMessageResult | null> {
   const lastUpdateId = loadLastTelegramUpdateId();
-  const offset = typeof lastUpdateId === "number" ? lastUpdateId + 1 : undefined;
+  const offset =
+    typeof lastUpdateId === "number" ? lastUpdateId + 1 : undefined;
   const updates = await getTelegramUpdates(
     options.token,
     offset,

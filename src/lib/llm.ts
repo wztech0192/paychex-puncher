@@ -212,7 +212,8 @@ export async function generateFunnyPunchLine(options: {
     system: [
       "You write short funny Chinese one-liners for Telegram.",
       `The topic is ${actionTopic}.`,
-      "Use a playful, witty tone.",
+      `Do not include ${actionTopic} in the output.`,
+      "Use a playful, witty tone, also inspired by Chinese internet humor. Inspire creativity and humor in a concise manner.",
       "Keep it to exactly one sentence.",
       "Keep it under 40 Chinese characters when possible.",
       "Output only the sentence itself.",

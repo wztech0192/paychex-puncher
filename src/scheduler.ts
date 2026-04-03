@@ -1,6 +1,6 @@
+import { resolveConfig } from "./lib/env.js";
 import { actionLabels } from "./constants.js";
 import { runApp } from "./app.js";
-import { loadLocalEnv, resolveConfig } from "./lib/env.js";
 import { generateFunnyPunchLine } from "./lib/llm.js";
 import { logger } from "./lib/logger.js";
 import { installProcessErrorHandlers, sleep } from "./lib/runtime.js";
@@ -24,12 +24,12 @@ const pollIntervalMs = 30_000;
 const schedulerErrorBackoffMs = 15_000;
 
 async function tick(): Promise<void> {
-  const config = resolveConfig({ isHeadless: false, runtime: "local" });
+  const config = resolveConfig({ isHeadless: true, runtime: "local" });
   const scheduleConfig = saveScheduleConfig(loadScheduleConfig());
   let runState = loadScheduleRunState();
   const eastern = getCurrentEasternDateTime();
 
-  logger.info(
+  logger.debug(
     {
       nowDate: eastern.date,
       nowTime: eastern.time,
@@ -153,10 +153,6 @@ export async function runScheduler(options?: {
 }): Promise<void> {
   if (options?.installErrorHandlers !== false) {
     installProcessErrorHandlers("scheduler");
-  }
-
-  if (options?.loadEnv !== false) {
-    loadLocalEnv();
   }
 
   const scheduleConfig = saveScheduleConfig(loadScheduleConfig());
