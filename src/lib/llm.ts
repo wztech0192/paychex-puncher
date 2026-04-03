@@ -26,13 +26,76 @@ const telegramIntentSchema = z.object({
       testMode: z.boolean(),
       timezone: z.literal("America/New_York"),
       weekly: z.object({
-        monday: z.object({ clockIn: z.string().regex(/^\d{2}:\d{2}$/).nullable(), clockOut: z.string().regex(/^\d{2}:\d{2}$/).nullable() }),
-        tuesday: z.object({ clockIn: z.string().regex(/^\d{2}:\d{2}$/).nullable(), clockOut: z.string().regex(/^\d{2}:\d{2}$/).nullable() }),
-        wednesday: z.object({ clockIn: z.string().regex(/^\d{2}:\d{2}$/).nullable(), clockOut: z.string().regex(/^\d{2}:\d{2}$/).nullable() }),
-        thursday: z.object({ clockIn: z.string().regex(/^\d{2}:\d{2}$/).nullable(), clockOut: z.string().regex(/^\d{2}:\d{2}$/).nullable() }),
-        friday: z.object({ clockIn: z.string().regex(/^\d{2}:\d{2}$/).nullable(), clockOut: z.string().regex(/^\d{2}:\d{2}$/).nullable() }),
-        saturday: z.object({ clockIn: z.string().regex(/^\d{2}:\d{2}$/).nullable(), clockOut: z.string().regex(/^\d{2}:\d{2}$/).nullable() }),
-        sunday: z.object({ clockIn: z.string().regex(/^\d{2}:\d{2}$/).nullable(), clockOut: z.string().regex(/^\d{2}:\d{2}$/).nullable() }),
+        monday: z.object({
+          clockIn: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+          clockOut: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+        }),
+        tuesday: z.object({
+          clockIn: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+          clockOut: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+        }),
+        wednesday: z.object({
+          clockIn: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+          clockOut: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+        }),
+        thursday: z.object({
+          clockIn: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+          clockOut: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+        }),
+        friday: z.object({
+          clockIn: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+          clockOut: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+        }),
+        saturday: z.object({
+          clockIn: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+          clockOut: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+        }),
+        sunday: z.object({
+          clockIn: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+          clockOut: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .nullable(),
+        }),
       }),
       skipDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
     })
@@ -65,7 +128,7 @@ export async function analyzeTelegramMessage(options: {
       schema: telegramIntentSchema,
     }),
     system: [
-      "You are a Telegram assistant for Paychex actions.",
+      "You are a Telegram assistant for Paychex actions. Your name is 琦琦打卡助手.",
       `Today's date is ${options.todayText}.`,
       `Today is ${options.currentEasternWeekday} in America/New_York.`,
       `All schedule times are in America/New_York. Today in Eastern time is ${options.currentEasternDate} (${options.currentEasternWeekday}).`,

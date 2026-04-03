@@ -4,6 +4,8 @@ import { runApp } from "./app.js";
 import { analyzeTelegramMessage } from "./lib/llm.js";
 import { loadLocalEnv, parseBooleanEnv, resolveConfig } from "./lib/env.js";
 import { logger } from "./lib/logger.js";
+import { installProcessErrorHandlers, sleep } from "./lib/runtime.js";
+import { runScheduler } from "./scheduler.js";
 import {
   getLastTelegramMessage,
   sendMessageToTelegram,
@@ -20,6 +22,7 @@ import type { TelegramMessage, TelegramUpdate } from "./types.js";
 
 const MAX_INPUT_LENGTH = 200;
 const MAX_MESSAGE_AGE_SECONDS = 3;
+const listenerErrorBackoffMs = 5_000;
 
 function previewText(text: string, maxLength = 80): string {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
@@ -481,6 +484,7 @@ export const telegramWebhookHandler: Handler = async (
 };
 
 export async function runTelegramListener(): Promise<void> {
+  installProcessErrorHandlers("telegram-listener");
   loadLocalEnv();
   const config = resolveConfig({
     isHeadless: parseBooleanEnv("TELEGRAM_LISTENER_HEADLESS", false),
@@ -501,31 +505,57 @@ export async function runTelegramListener(): Promise<void> {
     "Telegram bot listener started",
   );
 
-  while (true) {
-    const lastMessage = await getLastTelegramMessage({
-      token: config.telegramBotToken,
-      groupTitle: config.telegramGroupTitle,
-      chatId: config.telegramChatId,
-      botUsername: config.telegramBotUsername,
-      timeout: 30,
-      maxAgeSeconds: 10,
-    });
+  void runScheduler({
+    loadEnv: false,
+    installErrorHandlers: false,
+  }).catch((error) => {
+    logger.error({ err: error }, "Embedded scheduler failed during startup");
+  });
 
-    if (!lastMessage) {
-      continue;
+  if (config.telegramChatId) {
+    try {
+      await sendMessageToTelegram(config.telegramBotToken, {
+        chatId: config.telegramChatId,
+        text: "Hello! 琦琦打卡助手已上线。",
+      });
+    } catch (error) {
+      logger.error({ err: error }, "Failed to send startup notification");
     }
+  }
 
-    logger.info(
-      {
-        updateId: lastMessage.update.update_id,
-        chatId: lastMessage.message.chat.id,
-        chatTitle: lastMessage.message.chat.title,
-        messageId: lastMessage.message.message_id,
-        textPreview: previewText(lastMessage.message.text || ""),
-      },
-      "Processing latest Telegram listener update",
-    );
-    await processTelegramUpdate(lastMessage.update, config);
+  while (true) {
+    try {
+      const lastMessage = await getLastTelegramMessage({
+        token: config.telegramBotToken,
+        groupTitle: config.telegramGroupTitle,
+        chatId: config.telegramChatId,
+        botUsername: config.telegramBotUsername,
+        timeout: 30,
+        maxAgeSeconds: 10,
+      });
+
+      if (!lastMessage) {
+        continue;
+      }
+
+      logger.info(
+        {
+          updateId: lastMessage.update.update_id,
+          chatId: lastMessage.message.chat.id,
+          chatTitle: lastMessage.message.chat.title,
+          messageId: lastMessage.message.message_id,
+          textPreview: previewText(lastMessage.message.text || ""),
+        },
+        "Processing latest Telegram listener update",
+      );
+      await processTelegramUpdate(lastMessage.update, config);
+    } catch (error) {
+      logger.error(
+        { err: error, backoffMs: listenerErrorBackoffMs },
+        "Telegram listener iteration failed; retrying after backoff",
+      );
+      await sleep(listenerErrorBackoffMs);
+    }
   }
 }
 
@@ -534,7 +564,6 @@ if (
   process.argv[1]?.endsWith("telegram-bot.js")
 ) {
   runTelegramListener().catch((error) => {
-    logger.error({ err: error }, "Telegram bot listener crashed");
-    process.exit(1);
+    logger.fatal({ err: error }, "Telegram bot listener failed during startup");
   });
 }

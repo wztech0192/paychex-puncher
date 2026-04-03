@@ -166,7 +166,7 @@ export async function runPaychexFlow(
 
     const otpField = await page
       .waitForSelector(otpSelector, {
-        timeout: 3000,
+        timeout: 10000,
       })
       .catch(() => null);
 

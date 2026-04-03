@@ -2,6 +2,7 @@ import { actionLabels } from "./constants.js";
 import { runApp } from "./app.js";
 import { loadLocalEnv, resolveConfig } from "./lib/env.js";
 import { logger } from "./lib/logger.js";
+import { installProcessErrorHandlers, sleep } from "./lib/runtime.js";
 import { sendMessageToTelegram } from "./lib/telegram.js";
 import {
   formatScheduleConfig,
@@ -19,6 +20,7 @@ import {
 } from "./lib/schedule.js";
 
 const pollIntervalMs = 30_000;
+const schedulerErrorBackoffMs = 15_000;
 
 async function tick(): Promise<void> {
   const config = resolveConfig({ isHeadless: false, runtime: "local" });
@@ -47,25 +49,32 @@ async function tick(): Promise<void> {
       config.telegramBotToken &&
       config.telegramChatId
     ) {
-      logger.info(
-        {
-          action,
-          dateKey: notifyDecision.dateKey,
-          scheduledTime: notifyDecision.scheduledTime,
-          notifyMinutesBefore: scheduleConfig.notifyMinutesBefore,
-        },
-        "Sending early schedule notification",
-      );
-      await sendMessageToTelegram(config.telegramBotToken, {
-        chatId: config.telegramChatId,
-        text: `提醒：${scheduleConfig.notifyMinutesBefore} 分钟后将自动执行 ${actionLabels[action]}，计划时间 ${notifyDecision.scheduledTime}（美东时间）${scheduleConfig.testMode ? "，当前为测试模式，将执行打卡测试" : ""}。`,
-      });
-      runState = markScheduledActionNotified(
-        runState,
-        notifyDecision.dateKey,
-        eastern.time,
-      );
-      saveScheduleRunState(runState);
+      try {
+        logger.info(
+          {
+            action,
+            dateKey: notifyDecision.dateKey,
+            scheduledTime: notifyDecision.scheduledTime,
+            notifyMinutesBefore: scheduleConfig.notifyMinutesBefore,
+          },
+          "Sending early schedule notification",
+        );
+        await sendMessageToTelegram(config.telegramBotToken, {
+          chatId: config.telegramChatId,
+          text: `提醒：${scheduleConfig.notifyMinutesBefore} 分钟后将自动执行 ${actionLabels[action]}，计划时间 ${notifyDecision.scheduledTime}（美东时间）${scheduleConfig.testMode ? "，当前为测试模式，将执行打卡测试" : ""}。`,
+        });
+        runState = markScheduledActionNotified(
+          runState,
+          notifyDecision.dateKey,
+          eastern.time,
+        );
+        saveScheduleRunState(runState);
+      } catch (error) {
+        logger.error(
+          { err: error, action, dateKey: notifyDecision.dateKey },
+          "Failed to send early schedule notification",
+        );
+      }
     }
 
     const decision = shouldTriggerScheduledAction(
@@ -79,19 +88,43 @@ async function tick(): Promise<void> {
       continue;
     }
 
-    logger.info({ action, dateKey: decision.dateKey }, "Triggering scheduled action");
-    await runApp({
-      ...config,
-      paychexAction: scheduleConfig.testMode ? "test" : action,
-    });
+    try {
+      logger.info(
+        { action, dateKey: decision.dateKey },
+        "Triggering scheduled action",
+      );
+      await runApp({
+        ...config,
+        paychexAction: scheduleConfig.testMode ? "test" : action,
+      });
 
-    runState = markScheduledActionTriggered(runState, decision.dateKey, eastern.time);
-    saveScheduleRunState(runState);
+      runState = markScheduledActionTriggered(
+        runState,
+        decision.dateKey,
+        eastern.time,
+      );
+      saveScheduleRunState(runState);
+    } catch (error) {
+      logger.error(
+        { err: error, action, dateKey: decision.dateKey },
+        "Scheduled action failed; scheduler will continue running",
+      );
+    }
   }
 }
 
-async function main(): Promise<void> {
-  loadLocalEnv();
+export async function runScheduler(options?: {
+  loadEnv?: boolean;
+  installErrorHandlers?: boolean;
+}): Promise<void> {
+  if (options?.installErrorHandlers !== false) {
+    installProcessErrorHandlers("scheduler");
+  }
+
+  if (options?.loadEnv !== false) {
+    loadLocalEnv();
+  }
+
   const scheduleConfig = saveScheduleConfig(loadScheduleConfig());
 
   logger.info(
@@ -104,12 +137,28 @@ async function main(): Promise<void> {
   );
 
   while (true) {
-    await tick();
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    try {
+      await tick();
+      await sleep(pollIntervalMs);
+    } catch (error) {
+      logger.error(
+        { err: error, backoffMs: schedulerErrorBackoffMs },
+        "Scheduler loop failed; retrying after backoff",
+      );
+      await sleep(schedulerErrorBackoffMs);
+    }
   }
 }
 
-main().catch((error) => {
-  logger.error({ err: error }, "Scheduler crashed");
-  process.exit(1);
-});
+function isDirectSchedulerEntry(): boolean {
+  return (
+    process.argv[1]?.endsWith("scheduler.ts") ||
+    process.argv[1]?.endsWith("scheduler.js")
+  );
+}
+
+if (isDirectSchedulerEntry()) {
+  runScheduler().catch((error) => {
+  logger.fatal({ err: error }, "Scheduler failed during startup");
+  });
+}
