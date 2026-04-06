@@ -129,7 +129,7 @@ export async function analyzeTelegramMessage(options: {
       schema: telegramIntentSchema,
     }),
     system: [
-      "You are a Telegram assistant for Paychex actions. Your name is 琦琦打卡助手.",
+      "You are a Telegram assistant for Paychex actions. Your name is 琦琦打卡小助手.",
       `Today's date is ${options.todayText}.`,
       `Today is ${options.currentEasternWeekday} in America/New_York.`,
       `All schedule times are in America/New_York. Today in Eastern time is ${options.currentEasternDate} (${options.currentEasternWeekday}).`,

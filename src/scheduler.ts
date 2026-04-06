@@ -12,6 +12,7 @@ import {
   getScheduleRunStatePath,
   loadScheduleConfig,
   loadScheduleRunState,
+  markScheduledActionAttempted,
   markScheduledActionNotified,
   markScheduledActionTriggered,
   saveScheduleConfig,
@@ -70,7 +71,7 @@ async function tick(): Promise<void> {
         );
         await sendMessageToTelegram(config.telegramBotToken, {
           chatId: config.telegramChatId,
-          text: `提醒：${scheduleConfig.notifyMinutesBefore} 分钟后将自动执行 ${actionLabels[action]}，计划时间 ${notifyDecision.scheduledTime}（美东时间）${scheduleConfig.testMode ? "，当前为测试模式，将执行打卡测试" : ""}。`,
+          text: `琦琦打卡小助手提醒：${scheduleConfig.notifyMinutesBefore} 分钟后将自动执行 ${actionLabels[action]}，计划时间 ${notifyDecision.scheduledTime}（美东时间）${scheduleConfig.testMode ? "，当前为测试模式，将执行打卡测试" : ""}。`,
         });
         runState = markScheduledActionNotified(
           runState,
@@ -84,6 +85,18 @@ async function tick(): Promise<void> {
           "Failed to send early schedule notification",
         );
       }
+    } else {
+      logger.debug(
+        {
+          action,
+          reason: notifyDecision.reason,
+          dateKey: notifyDecision.dateKey,
+          telegramReady: Boolean(
+            config.telegramBotToken && config.telegramChatId,
+          ),
+        },
+        "Skipping early schedule notification",
+      );
     }
 
     const decision = shouldTriggerScheduledAction(
@@ -105,6 +118,12 @@ async function tick(): Promise<void> {
         { action, dateKey: decision.dateKey },
         "Triggering scheduled action",
       );
+      runState = markScheduledActionAttempted(
+        runState,
+        decision.dateKey,
+        eastern.time,
+      );
+      saveScheduleRunState(runState);
 
       if (
         config.telegramBotToken &&

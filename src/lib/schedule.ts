@@ -31,6 +31,8 @@ const scheduleDays: ScheduleDay[] = [
 ];
 
 const easternTimeZone = "America/New_York";
+const actionGraceWindowMinutes = 5;
+const notificationGraceWindowMinutes = 5;
 
 function defaultDailySchedule() {
   return {
@@ -263,15 +265,21 @@ export function shouldTriggerScheduledAction(
     return { shouldRun: false, dateKey, reason: "no-time-configured" };
   }
 
-  if (scheduledTime !== eastern.time) {
+  if (
+    !isWithinGraceWindow(
+      scheduledTime,
+      eastern.time,
+      actionGraceWindowMinutes,
+    )
+  ) {
     return { shouldRun: false, dateKey, reason: "time-not-matched" };
   }
 
-  if (runState.lastTriggered[dateKey] === eastern.time) {
+  if (runState.lastTriggered[dateKey]) {
     return { shouldRun: false, dateKey, reason: "already-triggered" };
   }
 
-  if (runState.lastAttempted[dateKey] === eastern.time) {
+  if (runState.lastAttempted[dateKey]) {
     return { shouldRun: false, dateKey, reason: "already-attempted" };
   }
 
@@ -299,6 +307,40 @@ function subtractMinutes(time: string, minutes: number): string | null {
   const hour = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
   const minute = String(totalMinutes % 60).padStart(2, "0");
   return `${hour}:${minute}`;
+}
+
+function parseTimeToMinutes(time: string): number | null {
+  const [hourPart, minutePart] = time.split(":").map(Number);
+
+  if (
+    !Number.isInteger(hourPart) ||
+    !Number.isInteger(minutePart) ||
+    hourPart < 0 ||
+    hourPart > 23 ||
+    minutePart < 0 ||
+    minutePart > 59
+  ) {
+    return null;
+  }
+
+  return hourPart * 60 + minutePart;
+}
+
+function isWithinGraceWindow(
+  targetTime: string,
+  currentTime: string,
+  graceWindowMinutes: number,
+): boolean {
+  const targetTimeMinutes = parseTimeToMinutes(targetTime);
+  const currentTimeMinutes = parseTimeToMinutes(currentTime);
+
+  if (targetTimeMinutes == null || currentTimeMinutes == null) {
+    return false;
+  }
+
+  const minutesPastTarget = currentTimeMinutes - targetTimeMinutes;
+
+  return minutesPastTarget >= 0 && minutesPastTarget < graceWindowMinutes;
 }
 
 export function shouldSendScheduleNotification(
@@ -344,11 +386,17 @@ export function shouldSendScheduleNotification(
     };
   }
 
-  if (notifyTime !== eastern.time) {
+  if (
+    !isWithinGraceWindow(
+      notifyTime,
+      eastern.time,
+      notificationGraceWindowMinutes,
+    )
+  ) {
     return { shouldNotify: false, dateKey, reason: "time-not-matched" };
   }
 
-  if (runState.lastNotified[dateKey] === eastern.time) {
+  if (runState.lastNotified[dateKey]) {
     return { shouldNotify: false, dateKey, reason: "already-notified" };
   }
 
