@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import chromium from "@sparticuz/chromium";
@@ -16,6 +17,14 @@ const iphone16ProMaxViewport = {
   isMobile: true,
   hasTouch: true,
 } as const;
+
+const chromeProfileDirName = ".chrome-profile";
+const ignoredProfileEntries = new Set([
+  "SingletonCookie",
+  "SingletonLock",
+  "SingletonSocket",
+  "DevToolsActivePort",
+]);
 
 function findLocalBrowserExecutable(explicitPath?: string): string {
   const candidates = [explicitPath, ...defaultChromeCandidates].filter(
@@ -62,6 +71,47 @@ async function applyBrowserDefaults(page: Page): Promise<void> {
   });
 }
 
+function isProfileInUseError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes("userDataDir") &&
+    error.message.includes("Use a different `userDataDir`")
+  );
+}
+
+function createTemporaryProfileFrom(sourceDir: string): string {
+  const tempDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "paychex-puncher-profile-"),
+  );
+
+  if (!fs.existsSync(sourceDir)) {
+    return tempDir;
+  }
+
+  fs.cpSync(sourceDir, tempDir, {
+    recursive: true,
+    filter: (entry) => !ignoredProfileEntries.has(path.basename(entry)),
+  });
+
+  return tempDir;
+}
+
+function createCleanup(dir: string): () => Promise<void> {
+  let cleanedUp = false;
+
+  return async () => {
+    if (cleanedUp) {
+      return;
+    }
+
+    cleanedUp = true;
+    await fs.promises.rm(dir, { recursive: true, force: true });
+  };
+}
+
 export async function launchBrowser(config: AppConfig): Promise<BrowserSession> {
   if (config.runtime === "lambda") {
     const browser = await puppeteer.launch({
@@ -80,26 +130,59 @@ export async function launchBrowser(config: AppConfig): Promise<BrowserSession> 
     return { browser, page };
   }
 
-  const userDataDir = path.resolve(__dirname, "../../.chrome-profile");
-  const browser = await puppeteer.launch({
-    executablePath: findLocalBrowserExecutable(config.chromePath),
-    headless: config.isHeadless,
-    userDataDir,
-    defaultViewport: null,
-    args: ["--start-maximized", "--lang=en-US,en", "--window-position=40,40"],
-  });
+  const executablePath = findLocalBrowserExecutable(config.chromePath);
+  const preferredUserDataDir = path.resolve(
+    __dirname,
+    `../../${chromeProfileDirName}`,
+  );
+  const launchLocalBrowser = async (
+    userDataDir: string,
+  ): Promise<BrowserSession> => {
+    const browser = await puppeteer.launch({
+      executablePath,
+      headless: config.isHeadless,
+      userDataDir,
+      defaultViewport: null,
+      args: ["--start-maximized", "--lang=en-US,en", "--window-position=40,40"],
+    });
 
-  const pages = await browser.pages();
-  const page = pages[0] ?? (await browser.newPage());
-  page.setDefaultNavigationTimeout(120000);
-  page.setDefaultTimeout(30000);
-  await applyBrowserDefaults(page);
+    const pages = await browser.pages();
+    const page = pages[0] ?? (await browser.newPage());
+    page.setDefaultNavigationTimeout(120000);
+    page.setDefaultTimeout(30000);
+    await applyBrowserDefaults(page);
 
-  return {
-    browser,
-    page,
-    userDataDir,
+    return {
+      browser,
+      page,
+      userDataDir,
+    };
   };
+
+  try {
+    return await launchLocalBrowser(preferredUserDataDir);
+  } catch (error) {
+    if (!isProfileInUseError(error)) {
+      throw error;
+    }
+
+    const temporaryUserDataDir = createTemporaryProfileFrom(preferredUserDataDir);
+    const cleanup = createCleanup(temporaryUserDataDir);
+
+    try {
+      const session = await launchLocalBrowser(temporaryUserDataDir);
+      session.browser.once("disconnected", () => {
+        void cleanup();
+      });
+      return {
+        ...session,
+        cleanup,
+      };
+    } catch (fallbackError) {
+      await cleanup();
+      throw fallbackError;
+    }
+  }
 }
 
 export function waitForBrowserClose(

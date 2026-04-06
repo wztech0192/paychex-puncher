@@ -58,8 +58,11 @@ export async function runApp(config: AppConfig): Promise<void> {
     }
 
     throw error;
+  } finally {
+    logger.info("Closing browser session");
+    await session.browser.close().catch((closeError) => {
+      logger.warn({ err: closeError }, "Failed to close browser session cleanly");
+    });
+    await session.cleanup?.();
   }
-
-  logger.info("Closing browser session");
-  await session.browser.close();
 }

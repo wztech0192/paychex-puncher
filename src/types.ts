@@ -52,6 +52,7 @@ export interface BrowserSession {
   browser: Browser;
   page: Page;
   userDataDir?: string;
+  cleanup?: () => Promise<void>;
 }
 
 export interface TelegramPhotoRequest {
