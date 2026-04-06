@@ -3,7 +3,6 @@ import { PAYCHEX_URL, punchSelectors } from "../constants.js";
 import { logger } from "../lib/logger.js";
 import {
   getLastTelegramMessage,
-  getTelegramUpdates,
   sendMessageToTelegram,
   sendPhotoToTelegram,
 } from "../lib/telegram.js";
@@ -14,17 +13,13 @@ import {
   pause,
   performHumanWarmup,
 } from "../lib/human.js";
-import {
-  loadLastTelegramUpdateId,
-  saveLastTelegramUpdateId,
-} from "../lib/listener-state.js";
 
 const otpSelector = "#one-time-password";
 const otpWaitTimeoutMs = 5000;
 
 async function isAlreadyLoggedIn(page: Page): Promise<boolean> {
   const punchWidget = await page
-    .waitForSelector(punchSelectors.clockIn, { timeout: 5000 })
+    .waitForSelector(punchSelectors.clockIn, { timeout: 15000 })
     .catch(() => null);
 
   return Boolean(punchWidget);
