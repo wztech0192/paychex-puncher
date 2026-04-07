@@ -1,5 +1,5 @@
 export const PAYCHEX_URL =
-  "https://myapps.paychex.com/landing_remote/login.do?lang=en&landingRedirect=true#?mode=employee&app=DASHBOARD_EMP&clients=001GJICFLZU616VSDEAQ";
+  "https://myapps.paychex.com/landing_remote/login.do?lang=en&landingRedirect=true#?mode=employee&app=TAHTML_EMP&clients=001GJICFLZU616VSDEAQ";
 
 export const punchSelectors = {
   clockIn:
