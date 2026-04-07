@@ -2,6 +2,7 @@ import { actionLabels } from "./constants.js";
 import { runPaychexFlow } from "./flow/paychex.js";
 import { launchBrowser } from "./lib/browser.js";
 import { logger } from "./lib/logger.js";
+import { clearPaychexSessionState } from "./lib/paychex-session.js";
 import { sendPhotoToTelegram } from "./lib/telegram.js";
 import type { AppConfig } from "./types.js";
 
@@ -59,6 +60,12 @@ export async function runApp(config: AppConfig): Promise<void> {
 
     throw error;
   } finally {
+    await clearPaychexSessionState(session.page).catch((cleanupError) => {
+      logger.warn(
+        { err: cleanupError },
+        "Failed to clear Paychex session state before browser close",
+      );
+    });
     logger.info("Closing browser session");
     await session.browser.close().catch((closeError) => {
       logger.warn({ err: closeError }, "Failed to close browser session cleanly");
