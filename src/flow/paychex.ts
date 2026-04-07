@@ -16,6 +16,56 @@ import {
 
 const otpSelector = "#one-time-password";
 const otpWaitTimeoutMs = 5000;
+const maxLoginRecoveryAttempts = 3;
+const dashboardWaitTimeoutMs = 30000;
+const missingClockInAfterLoginError =
+  "Paychex login completed, but the clock-in widget did not appear.";
+const paychexLoadErrorText = "Sorry, this info didn't load correctly.";
+
+function isMissingClockInAfterLoginError(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message === missingClockInAfterLoginError
+  );
+}
+
+async function hasPaychexLoadError(page: Page): Promise<boolean> {
+  const bodyText = await page
+    .$eval("body", (element) => element.innerText)
+    .catch(() => "");
+
+  return bodyText.includes(paychexLoadErrorText);
+}
+
+function isRetryablePaychexError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  if (isMissingClockInAfterLoginError(error)) {
+    return true;
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (
+    message.includes("manual otp verification timed out") ||
+    message.includes("invalid password") ||
+    message.includes("invalid username") ||
+    message.includes("access denied") ||
+    message.includes("account locked")
+  ) {
+    return false;
+  }
+
+  return (
+    message.includes(paychexLoadErrorText.toLowerCase()) ||
+    message.includes("navigation timeout") ||
+    message.includes("net::err_") ||
+    message.includes("target closed") ||
+    message.includes("detached frame") ||
+    message.includes("execution context was destroyed")
+  );
+}
 
 async function isAlreadyLoggedIn(page: Page): Promise<boolean> {
   const punchWidget = await page
@@ -47,6 +97,33 @@ async function notifyManualOtpCancelled(config: AppConfig): Promise<void> {
   });
 }
 
+async function notifyRefreshRetry(
+  page: Page,
+  config: AppConfig,
+  attempt: number,
+  maxAttempts: number,
+  reason: string,
+): Promise<void> {
+  if (!config.telegramBotToken || !config.telegramChatId) {
+    return;
+  }
+
+  const screenshot = (await page.screenshot({
+    type: "png",
+  })) as Uint8Array;
+
+  await sendPhotoToTelegram(config.telegramBotToken, config.telegramChatId, {
+    photoBuffer: screenshot,
+    filename: `paychex-refresh-attempt-${attempt}.png`,
+    caption: `Paychex 页面异常：${reason}。准备刷新后重试（${attempt}/${maxAttempts}）。`,
+  });
+
+  await sendMessageToTelegram(config.telegramBotToken, {
+    chatId: config.telegramChatId,
+    text: `Paychex 页面异常：${reason}。正在刷新页面并重试（${attempt}/${maxAttempts}）。`,
+  });
+}
+
 async function waitForManualOtpCompletion(
   page: Page,
   config: AppConfig,
@@ -55,14 +132,6 @@ async function waitForManualOtpCompletion(
     { timeoutMs: otpWaitTimeoutMs },
     "OTP step detected; waiting for manual verification in browser",
   );
-
-  await sendPhotoToTelegram(config.telegramBotToken!, config.telegramChatId!, {
-    photoBuffer: (await page.screenshot({
-      type: "png",
-    })) as Uint8Array,
-    filename: "finish-screen.png",
-    caption: `进入一次性验证码(OTP)页面...`,
-  });
 
   await notifyManualOtpRequired(config);
 
@@ -133,7 +202,7 @@ async function waitForManualOtpCompletion(
   logger.info("Manual OTP step completed");
 }
 
-export async function runPaychexFlow(
+async function runPaychexFlowOnce(
   page: Page,
   config: AppConfig,
 ): Promise<Uint8Array> {
@@ -178,9 +247,21 @@ export async function runPaychexFlow(
       await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
     }
 
-    logger.info("Login flow completed");
+    if (await hasPaychexLoadError(page)) {
+      throw new Error(paychexLoadErrorText);
+    }
 
-    await page.waitForSelector(punchSelectors.clockIn, { timeout: 120000 });
+    logger.info("Login flow completed");
+    const clockInButton = await page
+      .waitForSelector(punchSelectors.clockIn, {
+        timeout: dashboardWaitTimeoutMs,
+      })
+      .catch(() => null);
+
+    if (!clockInButton) {
+      throw new Error(missingClockInAfterLoginError);
+    }
+
     logger.info("Dashboard loaded, running warmup");
     await performHumanWarmup(page);
   } else {
@@ -193,4 +274,42 @@ export async function runPaychexFlow(
 
   logger.info("Capturing in-memory screenshot");
   return (await page.screenshot({ type: "png" })) as Uint8Array;
+}
+
+export async function runPaychexFlow(
+  page: Page,
+  config: AppConfig,
+): Promise<Uint8Array> {
+  for (let attempt = 1; attempt <= maxLoginRecoveryAttempts; attempt += 1) {
+    try {
+      return await runPaychexFlowOnce(page, config);
+    } catch (error) {
+      if (
+        !isRetryablePaychexError(error) ||
+        attempt === maxLoginRecoveryAttempts
+      ) {
+        throw error;
+      }
+
+      const reason =
+        error instanceof Error ? error.message : "Unknown Paychex page error";
+
+      logger.warn(
+        { attempt, maxAttempts: maxLoginRecoveryAttempts, reason },
+        "Retryable Paychex flow error detected; refreshing page and retrying flow",
+      );
+      await notifyRefreshRetry(
+        page,
+        config,
+        attempt,
+        maxLoginRecoveryAttempts,
+        reason,
+      );
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 120000 });
+      await pause(page, 700, 1500);
+      await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
+    }
+  }
+
+  throw new Error(missingClockInAfterLoginError);
 }
