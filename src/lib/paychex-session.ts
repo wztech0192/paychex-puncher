@@ -1,11 +1,7 @@
 import type { Page } from "puppeteer-core";
 import { logger } from "./logger.js";
 
-const paychexOrigins = [
-  "https://myapps.paychex.com",
-  "https://auth.myapps.paychex.com",
-  "https://login.flex.paychex.com",
-] as const;
+const paychexOrigins = ["https://myapps.paychex.com"] as const;
 
 export async function clearPaychexSessionState(page: Page): Promise<void> {
   logger.info(
