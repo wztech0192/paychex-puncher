@@ -214,6 +214,10 @@ async function runPaychexFlowOnce(
   await performHumanWarmup(page);
 
   if (!(await isAlreadyLoggedIn(page))) {
+    if (await hasPaychexLoadError(page)) {
+      throw new Error(paychexLoadErrorText);
+    }
+
     logger.info("Session not logged in, entering username");
     await focusAndTypeLikeHuman(
       page,
