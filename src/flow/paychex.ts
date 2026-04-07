@@ -164,7 +164,8 @@ export async function runPaychexFlow(
       config.paychexPassword,
     );
     await clickLikeHuman(page, "#login-button");
-    await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
+    await page.waitForNetworkIdle({ idleTime: 2000, timeout: 120000 });
+    await performHumanWarmup(page);
 
     const otpField = await page
       .waitForSelector(otpSelector, {
@@ -173,8 +174,6 @@ export async function runPaychexFlow(
       .catch(() => null);
 
     if (otpField) {
-      await performHumanWarmup(page);
-
       await waitForManualOtpCompletion(page, config);
       await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
     }
