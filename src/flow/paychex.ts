@@ -55,6 +55,15 @@ async function waitForManualOtpCompletion(
     { timeoutMs: otpWaitTimeoutMs },
     "OTP step detected; waiting for manual verification in browser",
   );
+
+  await sendPhotoToTelegram(config.telegramBotToken!, config.telegramChatId!, {
+    photoBuffer: (await page.screenshot({
+      type: "png",
+    })) as Uint8Array,
+    filename: "finish-screen.png",
+    caption: `进入一次性验证码(OTP)页面...`,
+  });
+
   await notifyManualOtpRequired(config);
 
   const lastMessage = await getLastTelegramMessage({
@@ -89,12 +98,10 @@ async function waitForManualOtpCompletion(
     timeout: 120000,
   });
 
-  const screenshot = (await page.screenshot({
-    type: "png",
-  })) as Uint8Array;
-
   await sendPhotoToTelegram(config.telegramBotToken!, config.telegramChatId!, {
-    photoBuffer: screenshot,
+    photoBuffer: (await page.screenshot({
+      type: "png",
+    })) as Uint8Array,
     filename: "finish-screen.png",
     caption: `已输入 OTP，等待验证结果...`,
   });
@@ -166,6 +173,8 @@ export async function runPaychexFlow(
       .catch(() => null);
 
     if (otpField) {
+      await performHumanWarmup(page);
+
       await waitForManualOtpCompletion(page, config);
       await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
     }
