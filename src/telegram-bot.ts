@@ -11,6 +11,7 @@ import {
   sendMessageToTelegram,
 } from "./lib/telegram.js";
 import { getTelegramListenerStatePath } from "./lib/listener-state.js";
+import { getPendingOtpRequest, submitOtpCode } from "./lib/otp-state.js";
 import {
   formatScheduleConfig,
   getCurrentEasternDateTime,
@@ -23,6 +24,7 @@ import type { TelegramMessage, TelegramUpdate } from "./types.js";
 const MAX_INPUT_LENGTH = 200;
 const MAX_MESSAGE_AGE_SECONDS = 3;
 const listenerErrorBackoffMs = 5_000;
+const otpCodePattern = /^\d{5}$/;
 
 function previewText(text: string, maxLength = 80): string {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
@@ -185,6 +187,34 @@ export async function processTelegramUpdate(
       "Skipping stale Telegram message older than 3 seconds",
     );
     return;
+  }
+
+  const pendingOtpRequest = getPendingOtpRequest();
+  const trimmedText = message.text.trim();
+
+  if (
+    pendingOtpRequest &&
+    otpCodePattern.test(trimmedText) &&
+    (!pendingOtpRequest.chatId ||
+      pendingOtpRequest.chatId === String(message.chat.id))
+  ) {
+    const accepted = submitOtpCode({
+      requestId: pendingOtpRequest.requestId,
+      code: trimmedText,
+      messageId: message.message_id,
+    });
+
+    if (accepted) {
+      logger.info(
+        {
+          updateId: update.update_id,
+          chatId: message.chat.id,
+          messageId: message.message_id,
+        },
+        "Accepted Telegram OTP code for pending Paychex verification",
+      );
+      return;
+    }
   }
 
   if (!messageMentionsBot(message, config.telegramBotUsername)) {
