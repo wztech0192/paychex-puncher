@@ -2,7 +2,11 @@ import { parseBooleanEnv, resolveConfig } from "./lib/env.js";
 import type { APIGatewayProxyResultV2, Handler } from "aws-lambda";
 import { supportedTelegramActions } from "./constants.js";
 import { runApp } from "./app.js";
-import { analyzeTelegramMessage, generateFunnyPunchLine } from "./lib/llm.js";
+import {
+  analyzeTelegramMessage,
+  generateFunnyPunchLine,
+  LLM_NO_REPLY_TOKEN,
+} from "./lib/llm.js";
 import { logger } from "./lib/logger.js";
 import { installProcessErrorHandlers, sleep } from "./lib/runtime.js";
 import { runScheduler } from "./scheduler.js";
@@ -461,6 +465,18 @@ export async function processTelegramUpdate(
     },
     "Sending Telegram text reply",
   );
+
+  if (intent.response.trim() === LLM_NO_REPLY_TOKEN) {
+    logger.info(
+      {
+        chatId: message.chat.id,
+        messageId: message.message_id,
+      },
+      "Skipping Telegram text reply due to no-reply token",
+    );
+    return;
+  }
+
   await sendMessageToTelegram(config.telegramBotToken, {
     chatId: String(message.chat.id),
     text: intent.response || "I couldn't generate a response.",

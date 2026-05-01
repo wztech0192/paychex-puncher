@@ -8,6 +8,8 @@ import type { PunchAction } from "../constants.js";
 import type { ScheduleConfig, TelegramIntent } from "../types.js";
 import { z } from "zod";
 
+export const LLM_NO_REPLY_TOKEN = "__NO_REPLY__";
+
 function isSupportedActionLabel(
   value: string,
 ): value is SupportedTelegramActionLabel {
@@ -150,6 +152,9 @@ export async function analyzeTelegramMessage(options: {
       "Never change enabled or testMode in schedule_update output. Preserve their current values exactly.",
       "For schedule updates, set kind=schedule_update and return the full updated scheduleConfig.",
       "If the user asks about the schedule or about any command, answer using the current schedule config and the command definitions above.",
+      "Handle normal social conversation naturally (for example: greetings, thanks, compliments, emojis).",
+      "If the user only sends a simple acknowledgment like thumbs up, OK, or great job, you may reply with a short friendly Chinese message.",
+      `If the user only sends an acknowledgment and the conversation appears finished with no pending question or task, set kind=reply and response=${LLM_NO_REPLY_TOKEN} to intentionally send no message.`,
       "Skip dates are one-off YYYY-MM-DD dates in Eastern time.",
       "Remove any skipDates that are before today.",
       "If the user clearly requests one of those actions, set kind=action and set actionLabel to the matching phrase.",
