@@ -71,11 +71,19 @@ function isRetryablePaychexError(error: unknown): boolean {
 }
 
 async function isAlreadyLoggedIn(page: Page): Promise<boolean> {
-  const punchWidget = await page
-    .waitForSelector(punchSelectors.clockIn, { timeout: 15000 })
-    .catch(() => null);
+  const result = await Promise.race([
+    page
+      .waitForSelector(punchSelectors.clockIn, { timeout: 120000 })
+      .then(() => "logged-in" as const)
+      .catch(() => null),
 
-  return Boolean(punchWidget);
+    page
+      .waitForSelector("#login-username", { timeout: 120000 })
+      .then(() => "login" as const)
+      .catch(() => null),
+  ]);
+
+  return result === "logged-in";
 }
 
 async function notifyManualOtpRequired(config: AppConfig): Promise<void> {
