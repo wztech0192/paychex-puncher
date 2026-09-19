@@ -25,10 +25,20 @@ const pollIntervalMinMs = 30_000;
 const pollIntervalMaxMs = 50_000;
 const schedulerErrorBackoffMs = 15_000;
 
+const punchDelayMinMs = 0;
+const punchDelayMaxMs = 5 * 60_000;
+
 function getRandomPollIntervalMs(): number {
   return (
     pollIntervalMinMs +
     Math.floor(Math.random() * (pollIntervalMaxMs - pollIntervalMinMs + 1))
+  );
+}
+
+function getRandomPunchDelayMs(): number {
+  return (
+    punchDelayMinMs +
+    Math.floor(Math.random() * (punchDelayMaxMs - punchDelayMinMs + 1))
   );
 }
 
@@ -125,6 +135,13 @@ async function tick(): Promise<void> {
       );
       saveScheduleRunState(runState);
 
+      const punchDelayMs = getRandomPunchDelayMs();
+      logger.info(
+        { action, dateKey: decision.dateKey, punchDelayMs },
+        "Delaying scheduled action by random jitter",
+      );
+      await sleep(punchDelayMs);
+
       if (
         config.telegramBotToken &&
         config.telegramChatId &&
@@ -162,7 +179,7 @@ async function tick(): Promise<void> {
       runState = markScheduledActionTriggered(
         runState,
         decision.dateKey,
-        eastern.time,
+        getCurrentEasternDateTime().time,
       );
       saveScheduleRunState(runState);
     } catch (error) {

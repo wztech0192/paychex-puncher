@@ -2,11 +2,7 @@ import { parseBooleanEnv, resolveConfig } from "./lib/env.js";
 import type { APIGatewayProxyResultV2, Handler } from "aws-lambda";
 import { supportedTelegramActions } from "./constants.js";
 import { runApp } from "./app.js";
-import {
-  analyzeTelegramMessage,
-  generateFunnyPunchLine,
-  LLM_NO_REPLY_TOKEN,
-} from "./lib/llm.js";
+import { analyzeTelegramMessage, LLM_NO_REPLY_TOKEN } from "./lib/llm.js";
 import { logger } from "./lib/logger.js";
 import { installProcessErrorHandlers, sleep } from "./lib/runtime.js";
 import { runScheduler } from "./scheduler.js";
@@ -24,11 +20,11 @@ import {
   saveScheduleConfig,
 } from "./lib/schedule.js";
 import type { TelegramMessage, TelegramUpdate } from "./types.js";
+import { otpCodePattern } from "./flow/paychex.js";
 
 const MAX_INPUT_LENGTH = 200;
 const MAX_MESSAGE_AGE_SECONDS = 3;
 const listenerErrorBackoffMs = 5_000;
-const otpCodePattern = /^\d{5}$/;
 
 function previewText(text: string, maxLength = 80): string {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
@@ -430,7 +426,7 @@ export async function processTelegramUpdate(
       },
       "Triggering Paychex flow from Telegram action",
     );
-    await runApp({
+    runApp({
       ...config,
       telegramChatId: String(message.chat.id),
       paychexAction: supportedTelegramActions[intent.actionLabel],
@@ -584,10 +580,10 @@ export async function runTelegramListener(): Promise<void> {
       );
       await processTelegramUpdate(lastMessage.update, config);
     } catch (error) {
-      logger.error(
-        { err: error, backoffMs: listenerErrorBackoffMs },
-        "Telegram listener iteration failed; retrying after backoff",
-      );
+      // logger.error(
+      //   { err: error, backoffMs: listenerErrorBackoffMs },
+      //   "Telegram listener iteration failed; retrying after backoff",
+      // );
       await sleep(listenerErrorBackoffMs);
     }
   }

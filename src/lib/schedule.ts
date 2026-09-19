@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PunchAction } from "../constants.js";
+import { getHolidayName, listHolidayNames } from "./holidays.js";
 import type {
   ScheduleConfig,
   ScheduleDay,
@@ -189,6 +190,7 @@ export function formatScheduleConfig(config: ScheduleConfig): string {
 
   lines.push(
     `Skip dates: ${config.skipDates.length > 0 ? config.skipDates.join(", ") : "none"}`,
+    `Skip holidays (always): ${listHolidayNames()}`,
   );
 
   return lines.join("\n");
@@ -259,6 +261,12 @@ export function shouldTriggerScheduledAction(
 
   if (config.skipDates.includes(eastern.date)) {
     return { shouldRun: false, dateKey, reason: "skip-date" };
+  }
+
+  const holiday = getHolidayName(eastern.date);
+
+  if (holiday) {
+    return { shouldRun: false, dateKey, reason: `holiday:${holiday}` };
   }
 
   if (!scheduledTime) {
@@ -366,6 +374,12 @@ export function shouldSendScheduleNotification(
 
   if (config.skipDates.includes(eastern.date)) {
     return { shouldNotify: false, dateKey, reason: "skip-date" };
+  }
+
+  const holiday = getHolidayName(eastern.date);
+
+  if (holiday) {
+    return { shouldNotify: false, dateKey, reason: `holiday:${holiday}` };
   }
 
   if (!scheduledTime) {

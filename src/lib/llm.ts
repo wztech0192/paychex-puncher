@@ -6,6 +6,7 @@ import {
 } from "../constants.js";
 import type { PunchAction } from "../constants.js";
 import type { ScheduleConfig, TelegramIntent } from "../types.js";
+import { listHolidayNames } from "./holidays.js";
 import { z } from "zod";
 
 export const LLM_NO_REPLY_TOKEN = "__NO_REPLY__";
@@ -122,11 +123,7 @@ export async function analyzeTelegramMessage(options: {
 
   const { output } = await generateText({
     model: openai(options.model),
-    providerOptions: {
-      openai: {
-        reasoningEffort: "minimal",
-      },
-    },
+
     output: Output.object({
       schema: telegramIntentSchema,
     }),
@@ -156,6 +153,7 @@ export async function analyzeTelegramMessage(options: {
       "If the user only sends a simple acknowledgment like thumbs up, OK, or great job, you may reply with a short friendly Chinese message.",
       `If the user only sends an acknowledgment and the conversation appears finished with no pending question or task, set kind=reply and response=${LLM_NO_REPLY_TOKEN} to intentionally send no message.`,
       "Skip dates are one-off YYYY-MM-DD dates in Eastern time.",
+      `These holidays are always skipped automatically and cannot be turned off: ${listHolidayNames()}.`,
       "Remove any skipDates that are before today.",
       "If the user clearly requests one of those actions, set kind=action and set actionLabel to the matching phrase.",
       "If kind is reply, set actionLabel to null and scheduleConfig to null.",

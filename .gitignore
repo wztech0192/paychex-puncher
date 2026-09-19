@@ -6,6 +6,6 @@ cypress/videos/
 .telegram-listener-state.json
 .schedule-config.json
 .schedule-run-state.json
-
+.telegram-otp-state.json
 finish-screen.png
 dist

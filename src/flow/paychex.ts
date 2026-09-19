@@ -16,14 +16,26 @@ import {
 } from "../lib/otp-state.js";
 import { sleep } from "../lib/runtime.js";
 
-const otpSelector = "#one-time-password";
+// All Paychex page element selectors live here so they can be updated in one place.
+const selectors = {
+  body: "body",
+  loginUsername: "#login-username",
+  loginButton: "#login-button",
+  password: "#password",
+  otpCode: '[data-payxautoid="payx.auth0.login.verifyOtp"]',
+  otpTrustCheckbox: "#rememberBrowser",
+  loginSubmitButton: '[data-payxautoid="payx.auth0.login.submitButton"]',
+  clockInWidget: punchSelectors.clockIn,
+} as const;
+
 const manualOtpCompletionTimeoutMs = 4 * 60 * 1000;
 const maxLoginRecoveryAttempts = 3;
 const dashboardWaitTimeoutMs = 30000;
+const defaultTimeout = 15000;
 const missingClockInAfterLoginError =
   "Paychex login completed, but the clock-in widget did not appear.";
 const paychexLoadErrorText = "Sorry, this info didn't load correctly.";
-const otpCodePattern = /^\d{5}$/;
+export const otpCodePattern = /^\d{4,7}$/;
 
 function isMissingClockInAfterLoginError(error: unknown): boolean {
   return (
@@ -33,7 +45,7 @@ function isMissingClockInAfterLoginError(error: unknown): boolean {
 
 async function hasPaychexLoadError(page: Page): Promise<boolean> {
   const bodyText = await page
-    .$eval("body", (element) => element.innerText)
+    .$eval(selectors.body, (element) => element.innerText)
     .catch(() => "");
 
   return bodyText.includes(paychexLoadErrorText);
@@ -63,6 +75,8 @@ function isRetryablePaychexError(error: unknown): boolean {
   return (
     message.includes(paychexLoadErrorText.toLowerCase()) ||
     message.includes("navigation timeout") ||
+    message.includes("timeout") ||
+    message.includes("timed out") ||
     message.includes("net::err_") ||
     message.includes("target closed") ||
     message.includes("detached frame") ||
@@ -73,12 +87,12 @@ function isRetryablePaychexError(error: unknown): boolean {
 async function isAlreadyLoggedIn(page: Page): Promise<boolean> {
   const result = await Promise.race([
     page
-      .waitForSelector(punchSelectors.clockIn, { timeout: 120000 })
+      .waitForSelector(selectors.clockInWidget, { timeout: defaultTimeout })
       .then(() => "logged-in" as const)
       .catch(() => null),
 
     page
-      .waitForSelector("#login-username", { timeout: 120000 })
+      .waitForSelector(selectors.loginUsername, { timeout: defaultTimeout })
       .then(() => "login" as const)
       .catch(() => null),
   ]);
@@ -93,7 +107,7 @@ async function notifyManualOtpRequired(config: AppConfig): Promise<void> {
 
   await sendMessageToTelegram(config.telegramBotToken, {
     chatId: config.telegramChatId,
-    text: "检测到 Paychex 一次性验证码页面。你可以直接在浏览器里完成验证，或在群里发送5位数验证码（不要带其他字符）。4 分钟内未完成将自动取消。",
+    text: "检测到 Paychex 一次性验证码页面。你可以直接在浏览器里完成验证，或在群里发送数验证码（不要带其他字符）。4 分钟内未完成将自动取消。",
   });
 }
 
@@ -172,11 +186,15 @@ async function waitForManualOtpCompletion(
           replyToMessageId: submittedOtp?.messageId,
         });
       }
-      await focusAndTypeLikeHuman(page, otpSelector, otpText);
+      await focusAndTypeLikeHuman(page, selectors.otpCode, otpText);
 
       logger.info("Entering OTP and submitting verification");
-      await clickLikeHuman(page, "#verify-otp-checkbox");
-      await clickLikeHuman(page, "#otp-next-button");
+      try {
+        await clickLikeHuman(page, selectors.otpTrustCheckbox);
+      } catch (error) {
+        logger.warn({ error }, "Failed to click OTP trust checkbox");
+      }
+      await clickLikeHuman(page, selectors.loginSubmitButton);
       otpEnteredFromTelegram = true;
       break;
     }
@@ -188,7 +206,7 @@ async function waitForManualOtpCompletion(
     await page
       .waitForNavigation({
         waitUntil: "networkidle2",
-        timeout: 120000,
+        timeout: defaultTimeout,
       })
       .catch(() => null);
 
@@ -209,16 +227,16 @@ async function waitForManualOtpCompletion(
 
   const completed = await page
     .waitForFunction(
-      async ({ otpSelector: fieldSelector, dashboardSelector }) => {
+      async ({ otpCodeSelector, dashboardSelector }) => {
         const dashboard = document.querySelector(dashboardSelector);
-        const otpField = document.querySelector(fieldSelector);
+        const otpField = document.querySelector(otpCodeSelector);
 
         return !otpField || Boolean(dashboard);
       },
       { timeout: manualOtpCompletionTimeoutMs },
       {
-        otpSelector,
-        dashboardSelector: punchSelectors.clockIn,
+        otpCodeSelector: selectors.otpCode,
+        dashboardSelector: selectors.clockInWidget,
       },
     )
     .then(() => true)
@@ -243,73 +261,20 @@ async function runPaychexFlowOnce(
   logger.info({ url: PAYCHEX_URL }, "Opening Paychex login page");
   await page.goto(PAYCHEX_URL, { waitUntil: "domcontentloaded" });
   await pause(page, 700, 1500);
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: defaultTimeout });
   logger.info("Running pre-login warmup");
   await performHumanWarmup(page);
 
   if (!(await isAlreadyLoggedIn(page))) {
-    if (await hasPaychexLoadError(page)) {
-      throw new Error(paychexLoadErrorText);
-    }
-
-    logger.info("Session not logged in, entering username");
-    await focusAndTypeLikeHuman(
-      page,
-      "#login-username",
-      config.paychexUsername,
-    );
-    await clickLikeHuman(page, "#login-button");
-    await page.waitForNavigation({
-      waitUntil: "networkidle2",
-      timeout: 120000,
-    });
-
-    logger.info("Entering password");
-    await focusAndTypeLikeHuman(
-      page,
-      "#login-password",
-      config.paychexPassword,
-    );
-    await clickLikeHuman(page, "#login-button");
-    await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
-
-    await sleep(1000);
-
-    await performHumanWarmup(page);
-
-    const otpField = await page
-      .waitForSelector(otpSelector, {
-        visible: true,
-        timeout: 10000,
-      })
-      .catch(() => null);
-
-    if (await hasPaychexLoadError(page)) {
-      throw new Error(paychexLoadErrorText);
-    }
-
-    if (otpField) {
-      await waitForManualOtpCompletion(page, config);
-      await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
-
-      if (await hasPaychexLoadError(page)) {
-        throw new Error(paychexLoadErrorText);
+    try {
+      await performLogin(page, config);
+    } catch (error) {
+      if (await isAlreadyLoggedIn(page)) {
+        logger.info("Login attempt failed, but session is already logged in");
+      } else {
+        throw error;
       }
     }
-
-    logger.info("Login flow completed");
-    const clockInButton = await page
-      .waitForSelector(punchSelectors.clockIn, {
-        timeout: dashboardWaitTimeoutMs,
-      })
-      .catch(() => null);
-
-    if (!clockInButton) {
-      throw new Error(missingClockInAfterLoginError);
-    }
-
-    logger.info("Dashboard loaded, running warmup");
-    await performHumanWarmup(page);
   } else {
     logger.info("Existing logged-in session detected");
   }
@@ -351,11 +316,77 @@ export async function runPaychexFlow(
         maxLoginRecoveryAttempts,
         reason,
       );
-      await page.reload({ waitUntil: "domcontentloaded", timeout: 120000 });
+      await page.reload({
+        waitUntil: "domcontentloaded",
+        timeout: defaultTimeout,
+      });
       await pause(page, 700, 1500);
-      await page.waitForNetworkIdle({ idleTime: 800, timeout: 120000 });
+      await page.waitForNetworkIdle({ idleTime: 800, timeout: defaultTimeout });
     }
   }
 
   throw new Error(missingClockInAfterLoginError);
+}
+
+async function performLogin(page: Page, config: AppConfig): Promise<void> {
+  if (await hasPaychexLoadError(page)) {
+    throw new Error(paychexLoadErrorText);
+  }
+
+  logger.info("Session not logged in, entering username");
+  await focusAndTypeLikeHuman(
+    page,
+    selectors.loginUsername,
+    config.paychexUsername,
+  );
+  await clickLikeHuman(page, selectors.loginButton);
+  await page.waitForNavigation({
+    waitUntil: "networkidle2",
+    timeout: defaultTimeout,
+  });
+
+  logger.info("Entering password");
+  await focusAndTypeLikeHuman(page, selectors.password, config.paychexPassword);
+  await clickLikeHuman(page, selectors.loginSubmitButton);
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: defaultTimeout });
+
+  await sleep(1000);
+
+  await performHumanWarmup(page);
+
+  logger.info("Checking for OTP field");
+  const otpField = await page
+    .waitForSelector(selectors.otpCode, {
+      visible: true,
+      timeout: 20000,
+    })
+    .catch(() => null);
+
+  if (await hasPaychexLoadError(page)) {
+    throw new Error(paychexLoadErrorText);
+  }
+
+  logger.info(`OTP field ${otpField ? "found" : "not found"}`);
+  if (otpField) {
+    await waitForManualOtpCompletion(page, config);
+    await page.waitForNetworkIdle({ idleTime: 800, timeout: defaultTimeout });
+
+    if (await hasPaychexLoadError(page)) {
+      throw new Error(paychexLoadErrorText);
+    }
+  }
+
+  logger.info("Login flow completed");
+  const clockInButton = await page
+    .waitForSelector(selectors.clockInWidget, {
+      timeout: dashboardWaitTimeoutMs,
+    })
+    .catch(() => null);
+
+  if (!clockInButton) {
+    throw new Error(missingClockInAfterLoginError);
+  }
+
+  logger.info("Dashboard loaded, running warmup");
+  await performHumanWarmup(page);
 }
