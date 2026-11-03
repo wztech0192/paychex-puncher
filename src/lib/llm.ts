@@ -207,11 +207,6 @@ export async function generateFunnyPunchLine(options: {
 
   const { text } = await generateText({
     model: openai(options.model),
-    providerOptions: {
-      openai: {
-        reasoningEffort: "minimal",
-      },
-    },
     system: [
       "You write short funny Chinese one-liners for Telegram.",
       `The topic is ${actionTopic}.`,
