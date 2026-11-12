@@ -63,6 +63,7 @@ export function resolveConfig(
     openAiModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
     paychexUsername: process.env.PAYCHEX_USERNAME || "",
     paychexPassword: process.env.PAYCHEX_PASSWORD || "",
+    paychexLoginUrl: process.env.PAYCHEX_LOGIN_URL || "",
     paychexAction,
   };
 }

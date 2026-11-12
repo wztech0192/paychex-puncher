@@ -1,8 +1,5 @@
 import type { Browser, Page } from "puppeteer-core";
-import type {
-  PunchAction,
-  SupportedTelegramActionLabel,
-} from "./constants.js";
+import type { PunchAction, SupportedTelegramActionLabel } from "./constants.js";
 
 export type ScheduleDay =
   | "monday"
@@ -45,6 +42,7 @@ export interface AppConfig {
   openAiModel: string;
   paychexUsername: string;
   paychexPassword: string;
+  paychexLoginUrl: string;
   paychexAction: PunchAction;
 }
 

@@ -1,5 +1,5 @@
 import type { Page } from "puppeteer-core";
-import { PAYCHEX_URL, punchSelectors } from "../constants.js";
+import { punchSelectors } from "../constants.js";
 import { logger } from "../lib/logger.js";
 import { sendMessageToTelegram, sendPhotoToTelegram } from "../lib/telegram.js";
 import type { AppConfig } from "../types.js";
@@ -258,8 +258,8 @@ async function runPaychexFlowOnce(
   page: Page,
   config: AppConfig,
 ): Promise<Uint8Array> {
-  logger.info({ url: PAYCHEX_URL }, "Opening Paychex login page");
-  await page.goto(PAYCHEX_URL, { waitUntil: "domcontentloaded" });
+  logger.info({ url: config.paychexLoginUrl }, "Opening Paychex login page");
+  await page.goto(config.paychexLoginUrl, { waitUntil: "domcontentloaded" });
   await pause(page, 700, 1500);
   await page.waitForNetworkIdle({ idleTime: 800, timeout: defaultTimeout });
   logger.info("Running pre-login warmup");
